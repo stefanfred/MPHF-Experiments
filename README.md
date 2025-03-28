@@ -47,7 +47,7 @@ This repository contains submodules.
 To clone the repository including submodules, use the following command.
 
 ```
-git clone --recursive https://github.com/ByteHamster/MPHF-Experiments.git
+git clone -j 16 --recursive https://github.com/ByteHamster/MPHF-Experiments.git
 ```
 
 ### Running the Experiments Directly
