@@ -168,7 +168,7 @@ class Contender {
         }
 };
 
-size_t Contender::numQueries = 5e7;
+size_t Contender::numQueries = 1e8;
 size_t Contender::numThreads = 1;
 size_t Contender::numQueryThreads = 1;
 size_t Contender::seed = 0;

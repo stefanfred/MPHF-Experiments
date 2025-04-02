@@ -12,7 +12,7 @@
  * https://arxiv.org/abs/2503.10161
  */
 int main(int argc, char** argv) {
-    size_t N = 1e7;
+    size_t N = 1e8;
     tlx::CmdlineParser cmd;
     cmd.add_bytes('n', "numKeys", N, "Number of objects");
     cmd.add_bytes('q', "numQueries", Contender::numQueries, "Number of queries to perform");
@@ -22,11 +22,17 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    // equal construction time
     {ConsensusContender<32768, 0.003>(N).run();}
     {BipartiteShockHashContender<56>(N, 2000).run();}
     {MorphisHashContender<46,4>(N, 2000).run();}
     {BipartiteShockHashFlatContender<94>(N).run();}
     {MorphisHashFlatContender<86,3,2>(N).run();}
     {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::table_bucketer<pthash::opt_bucketer>>(N, 1.0, 8.8).run();}
+
+    // equal space
+    {MorphisHashContender<64,4>(N, 2000).run();}
+    {BipartiteShockHashContender<128>(N, 2000).run();}
+
     return 0;
 }
