@@ -13,6 +13,7 @@ void morphisHashFlatContenderRunnerMultiExtraBit(size_t N) {
 }
 
 void morphisHashFlatContenderRunner(size_t N) {
+    morphisHashFlatContenderRunnerMultiExtraBit<22>(N);
     morphisHashFlatContenderRunnerMultiExtraBit<28>(N);
     morphisHashFlatContenderRunnerMultiExtraBit<34>(N);
     morphisHashFlatContenderRunnerMultiExtraBit<40>(N);
