@@ -4,6 +4,7 @@ template <int l, int ws>
 void morphisHashTestMultiBucket(size_t N) {
     {MorphisHashContender<l, ws>(N, 100).run();}
     {MorphisHashContender<l, ws>(N, 500).run();}
+    {MorphisHashContender<l, ws>(N, 1000).run();}
     {MorphisHashContender<l, ws>(N, 2000).run();}
 }
 

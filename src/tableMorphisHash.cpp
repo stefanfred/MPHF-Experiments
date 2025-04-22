@@ -23,12 +23,11 @@ int main(int argc, char** argv) {
     }
 
     // equal construction time
-    {ConsensusContender<32768, 0.003>(N).run();}
-    {BipartiteShockHashContender<56>(N, 2000).run();}
-    {MorphisHashContender<46,4>(N, 2000).run();}
-    {BipartiteShockHashFlatContender<94>(N).run();}
-    {MorphisHashFlatContender<86,3,2>(N).run();}
-    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::table_bucketer<pthash::opt_bucketer>>(N, 1.0, 8.8).run();}
+    {ConsensusContender<32768, 0.0025>(N).run();}
+    {BipartiteShockHashContender<66>(N, 2000).run();}
+    {MorphisHashContender<52,4>(N, 2000).run();}
+    {BipartiteShockHashFlatContender<96>(N).run();}
+    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::table_bucketer<pthash::opt_bucketer>>(N, 1.0, 8.85).run();}
 
     // equal space
     {MorphisHashContender<64,4>(N, 2000).run();}

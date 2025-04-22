@@ -4,6 +4,7 @@ template <int l>
 void bipartiteShockHashTestMulti(size_t N) {
     {BipartiteShockHashContender<l>(N, 100).run();}
     {BipartiteShockHashContender<l>(N, 500).run();}
+    {BipartiteShockHashContender<l>(N, 1000).run();}
     {BipartiteShockHashContender<l>(N, 2000).run();}
 }
 
