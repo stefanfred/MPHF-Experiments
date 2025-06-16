@@ -47,8 +47,8 @@
     %%      ELSE (name || "&?")
     %%    END AS method,
     %%    ROUND(bitsPerElement, 3),
-    %%    REPLACE(printf("%,d", CAST(1000000.0*constructionTimeMilliseconds/N AS INT)), ",", "\,") AS nsPerObject,
-    %%    CAST(1000000.0*queryTimeMilliseconds/numQueries AS INT) || "" AS nsPerObjectQuery
+    %%    REPLACE(printf("%,d", CAST(ROUND(1000000.0*constructionTimeMilliseconds/N, 0) AS INT)), ",", "\,") AS nsPerObject,
+    %%    CAST(ROUND(1000000.0*queryTimeMilliseconds/numQueries, 0) AS INT) || "" AS nsPerObjectQuery
     %% FROM parametersOverview
     %% ORDER BY name, -bitsPerElement
 
