@@ -1,43 +1,44 @@
 #include "RustPhastContender.h"
 
-void rustPHastContenderRunner(size_t N) {
-    for (size_t bucket_size_100 = 100; bucket_size_100 <= 280; bucket_size_100 += 20)
-        RustPhastContender(N, 4, bucket_size_100).run();
-    
-    for (size_t bucket_size_100 = 160; bucket_size_100 <= 280; bucket_size_100 += 20)
-        RustPhastContender(N, 5, bucket_size_100).run();
-    RustPhastContender(N, 5, 290).run();
+void rustPHastContenderRunner(size_t N, bool use_ef) {
+    for (size_t bucket_size_100 = 100; bucket_size_100 <= 300; bucket_size_100 += 5)
+        RustPhastContender(N, 4, bucket_size_100, use_ef).run();
 
-    RustPhastContender(N, 6, 260).run();
-    RustPhastContender(N, 6, 280).run();
-    for (size_t bucket_size_100 = 300; bucket_size_100 <= 330; bucket_size_100 += 10)
-        RustPhastContender(N, 6, bucket_size_100).run();
+    for (size_t bucket_size_100 = 160; bucket_size_100 <= 330; bucket_size_100 += 10)
+        RustPhastContender(N, 5, bucket_size_100, use_ef).run();
 
-    RustPhastContender(N, 7, 320).run();
-    RustPhastContender(N, 7, 340).run();
-    for (size_t bucket_size_100 = 360; bucket_size_100 <= 400; bucket_size_100 += 10)
-        RustPhastContender(N, 7, bucket_size_100).run();
+    for (size_t bucket_size_100 = 260; bucket_size_100 <= 350; bucket_size_100 += 10)
+        RustPhastContender(N, 6, bucket_size_100, use_ef).run();
 
-    RustPhastContender(N, 8, 350).run();
-    RustPhastContender(N, 8, 370).run();
-    for (size_t bucket_size_100 = 390; bucket_size_100 <= 460; bucket_size_100 += 10)
-        RustPhastContender(N, 8, bucket_size_100).run();
+    for (size_t bucket_size_100 = 320; bucket_size_100 <= 410; bucket_size_100 += 10)
+        RustPhastContender(N, 7, bucket_size_100, use_ef).run();
+    RustPhastContender(N, 7, 395, use_ef).run();
+    RustPhastContender(N, 7, 405, use_ef).run();
+
+    for (size_t bucket_size_100 = 350; bucket_size_100 <= 380; bucket_size_100 += 10)
+        RustPhastContender(N, 8, bucket_size_100, use_ef).run();
+    for (size_t bucket_size_100 = 390; bucket_size_100 <= 475; bucket_size_100 += 5)
+        RustPhastContender(N, 8, bucket_size_100, use_ef).run();
 
     for (size_t bucket_size_100 = 470; bucket_size_100 <= 530; bucket_size_100 += 20)
-        RustPhastContender(N, 9, bucket_size_100).run();
+        RustPhastContender(N, 9, bucket_size_100, use_ef).run();
 
-    for (size_t bucket_size_100 = 530; bucket_size_100 <= 590; bucket_size_100 += 20)
-        RustPhastContender(N, 10, bucket_size_100).run();
+    for (size_t bucket_size_100 = 530; bucket_size_100 <= 610; bucket_size_100 += 10)
+        RustPhastContender(N, 10, bucket_size_100, use_ef).run();
 
-    for (size_t bucket_size_100 = 590; bucket_size_100 <= 650; bucket_size_100 += 20)
-        RustPhastContender(N, 11, bucket_size_100).run();
-    RustPhastContender(N, 11, 660).run();
-    RustPhastContender(N, 11, 665).run();
+    for (size_t bucket_size_100 = 570; bucket_size_100 <= 680; bucket_size_100 += 10)
+        RustPhastContender(N, 11, bucket_size_100, use_ef).run();
+    RustPhastContender(N, 11, 675, use_ef).run();
 
-    for (size_t bucket_size_100 = 660; bucket_size_100 <= 720; bucket_size_100 += 15)
-        RustPhastContender(N, 12, bucket_size_100).run();
-    RustPhastContender(N, 12, 730).run();
+    for (size_t bucket_size_100 = 650; bucket_size_100 <= 740; bucket_size_100 += 10)
+        RustPhastContender(N, 12, bucket_size_100, use_ef).run();
+    RustPhastContender(N, 12, 735, use_ef).run();
 
-    for (size_t bucket_size_100 = 730; bucket_size_100 <= 790; bucket_size_100 += 20)
-        RustPhastContender(N, 13, bucket_size_100).run();
+    for (size_t bucket_size_100 = 710; bucket_size_100 <= 800; bucket_size_100 += 10)
+        RustPhastContender(N, 13, bucket_size_100, use_ef).run();
+}
+
+void rustPHastContenderRunner(size_t N) {
+    rustPHastContenderRunner(N, true);
+    rustPHastContenderRunner(N, false);
 }
