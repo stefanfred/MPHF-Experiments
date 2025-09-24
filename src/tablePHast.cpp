@@ -11,7 +11,7 @@
 #include "bucketplacement/ChdContender.h"
 #include "bucketplacement/RustPhastContender.h"
 #include "bucketplacement/RustPtrHashContender.h"
-#include "consensus/ConsensusContender.h"
+#include "recsplit/ConsensusContender.h"
 
 /**
 * Comparison table used in "PHast".

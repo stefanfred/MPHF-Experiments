@@ -5,7 +5,7 @@
 #include "shockhash/BipartiteShockHashFlatContender.h"
 #include "shockhash/MorphisHashContender.h"
 #include "shockhash/MorphisHashFlatContender.h"
-#include "consensus/ConsensusContender.h"
+#include "recsplit/ConsensusContender.h"
 
 /**
  * Comparison table used in "MorphisHash: Improving Space Efficiency of ShockHash for Minimal Perfect Hashing".

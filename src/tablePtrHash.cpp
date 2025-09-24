@@ -10,7 +10,7 @@
 #include "shockhash/BipartiteShockHashFlatContender.h"
 #include "bucketplacement/ChdContender.h"
 #include "bucketplacement/RustPtrHashContender.h"
-#include "consensus/ConsensusContender.h"
+#include "recsplit/ConsensusContender.h"
 
 /**
 * Comparison table used in "PtrHash: Minimal Perfect Hashing at RAM Throughput".

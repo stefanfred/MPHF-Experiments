@@ -16,7 +16,7 @@
 #include "shockhash/BipartiteShockHashFlatContender.h"
 #include "shockhash/ShockHashSimdContender.h"
 #include "bucketplacement/ChdContender.h"
-#include "consensus/ConsensusContender.h"
+#include "recsplit/ConsensusContender.h"
 #include "bucketplacement/FchContender.h"
 #include "shockhash/MorphisHashContender.h"
 #include "shockhash/MorphisHashFlatContender.h"

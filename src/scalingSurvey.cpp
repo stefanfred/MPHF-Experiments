@@ -1,6 +1,6 @@
 #include <bucketplacement/FchContender.h>
 #include <bucketplacement/RustPtrHashContender.h>
-#include <consensus/ConsensusContender.h>
+#include <recsplit/ConsensusContender.h>
 #include <shockhash/MorphisHashContender.h>
 #include <shockhash/MorphisHashFlatContender.h>
 #include <shockhash/ShockHashSimdContender.h>

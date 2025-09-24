@@ -15,7 +15,7 @@
 #include "shockhash/BipartiteShockHashContender.h"
 #include "bucketplacement/FchContender.h"
 #include "bucketplacement/PhobicContender.h"
-#include "consensus/ConsensusContender.h"
+#include "recsplit/ConsensusContender.h"
 #include "shockhash/BipartiteShockHashFlatContender.h"
 #include "fingerprinting/FiPSContender.h"
 #include "bucketplacement/ChdContender.h"

@@ -17,8 +17,6 @@ The framework provides a unified interface to test basically all modern MPHF con
   - PTHash-HEM ([Paper](https://doi.org/10.1109/TKDE.2023.3303341), [Code](https://github.com/jermp/pthash))
   - PHast, PHast+ ([Paper](https://arxiv.org/pdf/2504.17918), [Code](https://github.com/beling/bsuccinct-rs/))
   - PtrHash ([Paper](https://doi.org/10.48550/ARXIV.2502.15539), [Code](https://github.com/RagnarGrootKoerkamp/PTRHash))
-- Consensus
-  - Consensus-RS ([Paper](https://doi.org/10.48550/ARXIV.2502.05613), [Code](https://github.com/ByteHamster/ConsensusRecSplit/))
 - Fingerprinting
   - BBHash ([Paper](https://doi.org/10.4230/LIPICS.SEA.2017.25), [Code](https://github.com/rizkg/BBHash))
   - FiPS ([Paper](https://doi.org/10.5445/IR/1000176432), [Code](https://github.com/ByteHamster/FiPS))
@@ -28,6 +26,7 @@ The framework provides a unified interface to test basically all modern MPHF con
   - RecSplit ([Paper](https://doi.org/10.1137/1.9781611976007.14), [Code](https://github.com/vigna/sux/blob/master/sux/function/RecSplit.hpp))
   - GpuRecSplit ([Paper](https://doi.org/10.4230/LIPICS.ESA.2023.19), [Code](https://github.com/ByteHamster/GpuRecSplit))
   - SIMDRecSplit, RecSplit with rotation fitting ([Paper](https://doi.org/10.4230/LIPICS.ESA.2023.19), [Code](https://github.com/ByteHamster/GpuRecSplit))
+  - Consensus-RS ([Paper](https://doi.org/10.48550/ARXIV.2502.05613), [Code](https://github.com/ByteHamster/ConsensusRecSplit/))
 - Retrieval
   - BDZ / BPZ ([Paper](https://doi.org/10.1145/1321440.1321532), [Code](https://cmph.sourceforge.net/))
   - BMZ ([Paper](https://www.researchgate.net/publication/228715398_A_new_algorithm_for_constructing_minimal_perfect_hash_functions), [Code](https://cmph.sourceforge.net/))
