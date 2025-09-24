@@ -25,6 +25,7 @@
 #include "bucketplacement/FchCmphContender.h"
 #include "shockhash/MorphisHashContender.h"
 #include "shockhash/MorphisHashFlatContender.h"
+#include "bucketplacement/RustPhastPlusContender.h"
 
 #ifdef HAS_VULKAN
 #include "bucketplacement/GpuPhobicContender.h"
@@ -56,6 +57,7 @@ int main(int argc, char** argv) {
     bool rustFmphContender = false;
     bool rustFmphGoContender = false;
     bool rustPhastContender = false;
+    bool rustPhastPlus = false;
     bool rustPtrHashContender = false;
     bool sichashOnlyPartial = false;
     bool bipartiteShockHash = false;
@@ -102,6 +104,7 @@ int main(int argc, char** argv) {
     cmd.add_flag("rustFmph", rustFmphContender, "Execute rust fmph benchmark");
     cmd.add_flag("rustFmphGo", rustFmphGoContender, "Execute rust fmph-go benchmark");
     cmd.add_flag("rustPHast", rustPhastContender, "Execute rust PHast benchmark");
+    cmd.add_flag("rustPHastPlus", rustPhastPlus, "Execute rust PHast+ benchmark");
     cmd.add_flag("rustPtrHash", rustPtrHashContender, "Execute rust ptrhash benchmark");
     cmd.add_flag("gpuPhobic", gpuPhobic, "Execute Phobic on the GPU benchmark");
     cmd.add_flag("fiPS", fiPS, "Execute FiPS benchmark");
@@ -118,6 +121,9 @@ int main(int argc, char** argv) {
     }
     if (rustPhastContender) {
         rustPHastContenderRunner(N);
+    }
+    if (rustPhastPlus) {
+        rustPHastPlusContenderRunner(N);
     }
     if (rustPtrHashContender) {
         rustPtrHashContenderRunner(N);

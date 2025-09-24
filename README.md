@@ -15,7 +15,7 @@ The framework provides a unified interface to test basically all modern MPHF con
   - PHOBIC-GPU ([Paper](https://doi.org/10.4230/LIPIcs.ESA.2024.69), [Code](https://github.com/stefanfred/PHOBIC-GPU))
   - PTHash ([Paper](https://doi.org/10.1145/3404835.3462849), [Code](https://github.com/jermp/pthash))
   - PTHash-HEM ([Paper](https://doi.org/10.1109/TKDE.2023.3303341), [Code](https://github.com/jermp/pthash))
-  - PHast (Not published yet) ([Code](https://github.com/beling/bsuccinct-rs/))
+  - PHast, PHast+ ([Paper](https://arxiv.org/pdf/2504.17918), [Code](https://github.com/beling/bsuccinct-rs/))
   - PtrHash ([Paper](https://doi.org/10.48550/ARXIV.2502.15539), [Code](https://github.com/RagnarGrootKoerkamp/PTRHash))
 - Consensus
   - Consensus-RS ([Paper](https://doi.org/10.48550/ARXIV.2502.05613), [Code](https://github.com/ByteHamster/ConsensusRecSplit/))

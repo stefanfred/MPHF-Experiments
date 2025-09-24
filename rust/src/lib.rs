@@ -1,6 +1,7 @@
 mod fmph_contender;
 mod fmph_go_contender;
 mod phast_contender;
+mod phast_plus_contender;
 mod ptr_hash_contender;
 
 use std::os::raw::c_char;
