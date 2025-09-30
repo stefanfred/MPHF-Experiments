@@ -1,45 +1,60 @@
 [submodule "cmph"]
 	path = extlib/cmph
 	url = https://github.com/bonitao/cmph.git
+	branch = master
 [submodule "extlib/pthash"]
 	path = extlib/pthash
 	url = https://github.com/jermp/pthash.git
+	branch = master
 [submodule "extlib/BBHash"]
 	path = extlib/BBHash
 	url = https://github.com/rizkg/BBHash.git
+	branch = master
 [submodule "extlib/mphf-wbpm"]
 	path = extlib/mphf-wbpm
 	url = https://github.com/weaversa/MPHF-WBPM.git
+	branch = master
 [submodule "extlib/sichash"]
 	path = extlib/sichash
 	url = https://github.com/ByteHamster/SicHash.git
+	branch = main
 [submodule "sux"]
 	path = extlib/sux
-	url = https://github.com/ByteHamster-etc/sux.git
+	url = https://github.com/vigna/sux.git
+	branch = master
 [submodule "extlib/gpurecsplit"]
 	path = extlib/gpurecsplit
 	url = https://github.com/ByteHamster/GpuRecSplit.git
+	branch = main
 [submodule "extlib/ShockHash"]
 	path = extlib/ShockHash
 	url = https://github.com/ByteHamster/ShockHash.git
+	branch = main
 [submodule "extlib/util"]
 	path = extlib/util
 	url = https://github.com/ByteHamster/Util.git
+	branch = main
 [submodule "extlib/tlx"]
 	path = extlib/tlx
 	url = https://github.com/tlx/tlx.git
+	branch = master
 [submodule "extlib/phobic-gpu"]
 	path = extlib/phobic-gpu
 	url = https://github.com/stefanfred/PHOBIC-GPU.git
+	branch = main
 [submodule "extlib/fch"]
 	path = extlib/fch
 	url = https://github.com/roberto-trani/mphf_benchmark.git
+	branch = main
 [submodule "extlib/fips"]
 	path = extlib/fips
 	url = https://github.com/ByteHamster/FiPS.git
+	branch = main
 [submodule "extlib/consensus"]
 	path = extlib/consensus
 	url = https://github.com/ByteHamster/ConsensusRecSplit.git
+	branch = main
 [submodule "extlib/morphishash"]
 	path = extlib/morphishash
 	url = https://github.com/stefanfred/MorphisHash.git
+	branch = main
