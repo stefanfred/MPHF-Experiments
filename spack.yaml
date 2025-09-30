@@ -8,6 +8,7 @@ spack:
   - gcc@14.2
   - cmake@3.30
   - intel-oneapi-tbb
+  - tbb
   - rust@1.85
   view: true
   concretizer:

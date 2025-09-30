@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --array=0-23
+#SBATCH --array=0-29
 
 params="--numKeys 100M --numThreads 1 --numQueries 100M"
 loadfactor090="$params --minimalOnly --loadFactor 0.9"
@@ -27,6 +27,7 @@ jobs=(
     "$params --rustFmph"
     "$params --rustFmphGo"
     "$params --rustPHast"
+    "$params --rustPHastPlus"
     "$params --shockhash"
     "$params --bipartiteShockHash"
     "$params --consensus"
