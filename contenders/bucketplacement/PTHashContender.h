@@ -10,7 +10,7 @@ class PTHashContender : public Contender {
     public:
         double lambda;
         double internalLoadFactor;
-        pthash::single_phf<pthash::murmurhash2_64, bucketer, encoder, minimal, pthash::xor_displacement> pthashFunction;
+        pthash::single_phf<pthash::xxhash_64, bucketer, encoder, minimal> pthashFunction;
 
         PTHashContender(size_t N, double loadFactor, double lambda)
                 : Contender(N, minimal ? 1.0 : loadFactor), lambda(lambda), internalLoadFactor(loadFactor) {
@@ -35,7 +35,6 @@ class PTHashContender : public Contender {
             config.num_threads = numThreads;
             config.minimal = minimal;
             config.verbose = false;
-            config.search = pthash::xor_displacement;
             pthashFunction.build_in_internal_memory(keys.begin(), keys.size(), config);
         }
 

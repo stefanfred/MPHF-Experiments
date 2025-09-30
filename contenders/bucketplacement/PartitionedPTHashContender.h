@@ -11,7 +11,7 @@ class PartitionedPTHashContender : public Contender {
     public:
         double lambda;
         double internalLoadFactor;
-        pthash::partitioned_phf<pthash::murmurhash2_64, bucketer, encoder, minimal, pthash::xor_displacement> pthashFunction;
+        pthash::partitioned_phf<pthash::xxhash_64, bucketer, encoder, minimal> pthashFunction;
 
         PartitionedPTHashContender(size_t N, double loadFactor, double lambda)
                 : Contender(N, minimal ? 1.0 : loadFactor), lambda(lambda), internalLoadFactor(loadFactor) {
@@ -37,7 +37,6 @@ class PartitionedPTHashContender : public Contender {
             config.avg_partition_size = (N + numThreads) / numThreads;
             config.minimal = minimal;
             config.verbose = false;
-            config.search = pthash::xor_displacement;
             pthashFunction.build_in_internal_memory(keys.begin(), keys.size(), config);
         }
 

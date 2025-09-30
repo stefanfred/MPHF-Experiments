@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
         Contender::numQueries = numQueries;
         {PTHashContender<true, pthash::elias_fano>(N, 0.95, 6.0).run();}
         {PartitionedPTHashContender<true, pthash::elias_fano>(N, 0.95, 6.0).run();}
-        {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::table_bucketer<pthash::opt_bucketer>>(N, 1.0, 6.0).run();}
+        {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::opt_bucketer>(N, 1.0, 6.0).run();}
         {RustPtrHashContender(N, RustPtrHashContender::VARIANT_LINEAR_VEC, 3.0).run();}
         {SicHashContender<true, 64>(N, 0.95, sichash::SicHashConfig().percentages(0.37, 0.44)).run();}
 

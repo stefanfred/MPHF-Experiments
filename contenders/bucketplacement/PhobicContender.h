@@ -13,7 +13,7 @@ class PhobicContender : public Contender {
         double lambda;
         double internalLoadFactor;
         size_t partitionSize = 2500;
-        pthash::dense_partitioned_phf<pthash::xxhash128, bucketer, encoder, false, pthash::add_displacement> pthashFunction;
+        pthash::dense_partitioned_phf<pthash::xxhash_64, bucketer, encoder, true> pthashFunction;
         pthash::build_timings buildTimings;
 
         PhobicContender(size_t N, double loadFactor, double lambda)
@@ -41,8 +41,6 @@ class PhobicContender : public Contender {
             config.minimal = true;
             config.verbose = false;
             config.dense_partitioning = true;
-            config.secondary_sort = true;
-            config.search = pthash::add_displacement;
             buildTimings = pthashFunction.build_in_internal_memory(keys.begin(), keys.size(), config);
         }
 

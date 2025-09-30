@@ -59,11 +59,11 @@ int main(int argc, char** argv) {
     {PartitionedPTHashContender<true, pthash::compact_compact>(N, 0.99, 4.0).run();}
     {PartitionedPTHashContender<true, pthash::elias_fano>(N, 0.99, 5.0).run();}
 
-    {PhobicContender<pthash::dense_interleaved<pthash::compact>, pthash::table_bucketer<pthash::opt_bucketer>>(N, 1.0, 3.9).run();}
-    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::table_bucketer<pthash::opt_bucketer>>(N, 1.0, 4.5).run();}
-    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::table_bucketer<pthash::opt_bucketer>>(N, 1.0, 6.5).run();}
-    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::table_bucketer<pthash::opt_bucketer>>(N, 1.0, 7.0).run();}
-    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::table_bucketer<pthash::opt_bucketer>>(N, 1.0, 9.0).run();}
+    {PhobicContender<pthash::dense_interleaved<pthash::compact>, pthash::opt_bucketer>(N, 1.0, 3.9).run();}
+    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::opt_bucketer>(N, 1.0, 4.5).run();}
+    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::opt_bucketer>(N, 1.0, 6.5).run();}
+    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::opt_bucketer>(N, 1.0, 7.0).run();}
+    {PhobicContender<pthash::dense_interleaved<pthash::rice>, pthash::opt_bucketer>(N, 1.0, 9.0).run();}
 
     #ifdef HAS_VULKAN
         {GpuPhobicContender(N, 9, 2500, 1.0).run();} // Multi-R
