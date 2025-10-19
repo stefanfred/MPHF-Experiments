@@ -111,7 +111,7 @@ target_include_directories(Contender PUBLIC lib)
 target_link_libraries(Contender PRIVATE ByteHamsterUtil tlx RustCompetitors)
 
 add_library(PerfectHashingCompetitorParetoRunners INTERFACE)
-file(GLOB_RECURSE contendersCpp "${CMAKE_SOURCE_DIR}/contenders/**.cpp")
+file(GLOB_RECURSE contendersCpp CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/contenders/**.cpp")
 foreach(filename IN LISTS contendersCpp)
     get_filename_component(name "${filename}" NAME_WLE)
     if (name STREQUAL "GpuRecSplitContender"

@@ -21,6 +21,8 @@
 #include "shockhash/BipartiteShockHashContender.h"
 #include "shockhash/BipartiteShockHashFlatContender.h"
 #include "shockhash/ShockHashContender.h"
+#include "bucketplacement/RustPhastContender.h"
+#include "bucketplacement/RustPhastPlusWrappedContender.h"
 
 /**
  * Comparison table used in "Modern Minimal Perfect Hashing".
@@ -59,6 +61,8 @@ int main(int argc, char** argv) {
         {BBHashContender(N, 5.0, 0).run();}
         {BipartiteShockHashContender<64>(N, 2000).run();}
         {MorphisHashContender<64,4>(N, 2000).run();}
+        {RustPhastContender(N,  7, 370, true).run();}
+        {RustPhastPlusWrappedContender(N, 1, 11, 660, 0, true).run();}
 
         // Competitors that are only single-threaded
         if (Contender::numThreads == 1) {

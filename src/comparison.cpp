@@ -25,7 +25,7 @@
 #include "bucketplacement/FchCmphContender.h"
 #include "shockhash/MorphisHashContender.h"
 #include "shockhash/MorphisHashFlatContender.h"
-#include "bucketplacement/RustPhastPlusContender.h"
+#include "bucketplacement/RustPhastPlusWrappedContender.h"
 
 #ifdef HAS_VULKAN
 #include "bucketplacement/GpuPhobicContender.h"
@@ -123,7 +123,7 @@ int main(int argc, char** argv) {
         rustPHastContenderRunner(N);
     }
     if (rustPhastPlus) {
-        rustPHastPlusContenderRunner(N);
+        rustPHastPlusWrappedContenderRunner(N);
     }
     if (rustPtrHashContender) {
         rustPtrHashContenderRunner(N);

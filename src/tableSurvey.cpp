@@ -20,6 +20,8 @@
 #include "bucketplacement/FchContender.h"
 #include "shockhash/MorphisHashContender.h"
 #include "shockhash/MorphisHashFlatContender.h"
+#include "bucketplacement/RustPhastContender.h"
+#include "bucketplacement/RustPhastPlusWrappedContender.h"
 
 /**
  * Comparison table used in "Modern Minimal Perfect Hashing".
@@ -97,6 +99,12 @@ int main(int argc, char** argv) {
 
     {MorphisHashFlatContender<60,3,2>(N).run();}
     {MorphisHashFlatContender<84,3,2>(N).run();}
+
+    {RustPhastContender(N, 11, 630, true).run();}
+    {RustPhastContender(N,  7, 370, true).run();}
+
+    {RustPhastPlusWrappedContender(N, 2,  8, 435, 0, true).run();}
+    {RustPhastPlusWrappedContender(N, 1, 11, 660, 0, true).run();}
 
     return 0;
 }
