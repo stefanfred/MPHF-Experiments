@@ -138,7 +138,7 @@ if (CMAKE_CUDA_COMPILER)
     add_executable(ComparisonCuda src/comparisonCuda.cu)
     target_link_libraries(ComparisonCuda PRIVATE PerfectHashingCompetitorsCuda Sux)
     set_target_properties(ComparisonCuda PROPERTIES CUDA_SEPERABLE_COMPILATION ON)
-    set_target_properties(ComparisonCuda PROPERTIES CUDA_ARCHITECTURES "50;61;72")
+    set_target_properties(ComparisonCuda PROPERTIES CUDA_ARCHITECTURES "native")
 endif()
 
 add_executable(ScalingThesisLehmann src/scalingThesisLehmann.cpp)
