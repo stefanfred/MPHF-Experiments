@@ -4,6 +4,10 @@
 #include <iostream>
 #include <chrono>
 #include <bytehamster/util/XorShift64.h>
+#include <unistd.h>
+#include <thread>
+#include <span>
+#include "PerformanceCounter.h"
 
 std::vector<std::string> generateInputData(size_t N, uint64_t seed) {
     std::vector<std::string> inputData;
@@ -52,6 +56,8 @@ void Contender::run(bool shouldPrintResult) {
     usleep(1000*1000);
     std::cout << "Constructing" << std::endl;
 
+    PerformanceCounter constructionCounter;
+    constructionCounter.start();
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     try {
         construct(keys);
@@ -60,7 +66,9 @@ void Contender::run(bool shouldPrintResult) {
         return;
     }
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    constructionCounter.stop();
     constructionTimeMicroseconds = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+    constructionCacheMisses = constructionCounter.getCount();
 
     if (!skipTests) {
         std::cout<<"Testing"<<std::endl;
@@ -80,10 +88,14 @@ void Contender::run(bool shouldPrintResult) {
         usleep(1000*1000);
         std::cout<<"Querying"<<std::endl;
         if (numQueryThreads == 1) {
+            PerformanceCounter queryCounter;
+            queryCounter.start();
             begin = std::chrono::steady_clock::now();
             performQueries(queryPlan);
             end = std::chrono::steady_clock::now();
+            queryCounter.stop();
             queryTimeMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+            queryCacheMisses = queryCounter.getCount();
         } else {
             std::vector<std::thread> threads;
             begin = std::chrono::steady_clock::now();
@@ -106,18 +118,21 @@ void Contender::run(bool shouldPrintResult) {
     }
 }
 
-void Contender::printResult(std::string additional) {
+void Contender::printResult(const std::string &additional) {
     // Some competitors print stuff when determining their space consumption
     double bitsPerElement = (double) sizeBits() / N;
+    size_t totalQueries = numQueries * numQueryThreads;
     std::cout << "RESULT"
               << " name=" << name()
               << " bitsPerElement=" << bitsPerElement
               << " constructionTimeMilliseconds=" << (constructionTimeMicroseconds < 10000
                                     ? std::to_string(0.001 * constructionTimeMicroseconds)
                                     : std::to_string(constructionTimeMicroseconds / 1000))
+              << " constructionCacheMissesPerKey=" << (1.0f * constructionCacheMisses / N)
               << " queryTimeMilliseconds=" << queryTimeMilliseconds
               << " numQueries=" << numQueries
-              << " numQueriesTotal=" << (numQueries * numQueryThreads)
+              << " numQueriesTotal=" << totalQueries
+              << " cacheMissesPerQuery=" << (totalQueries > 0 ? (1.0f * queryCacheMisses / totalQueries) : 0)
               << " N=" << N
               << " loadFactor=" << loadFactor
               << " threads=" << numThreads

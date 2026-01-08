@@ -24,6 +24,8 @@ class Contender {
         const size_t M;
         long constructionTimeMicroseconds = 0;
         long queryTimeMilliseconds = 0;
+        long queryCacheMisses = 0;
+        long constructionCacheMisses = 0;
 
         Contender(size_t N, double loadFactor)
                 : N(N), loadFactor(loadFactor), mByN(1.0 / loadFactor), M(N * mByN) {
@@ -43,12 +45,12 @@ class Contender {
             (void) keys;
         }
 
-        virtual void performQueries(const std::span<std::string> keys) = 0;
-        virtual void performTest(const std::span<std::string> keys) = 0;
+        virtual void performQueries(std::span<std::string> keys) = 0;
+        virtual void performTest(std::span<std::string> keys) = 0;
 
         void run(bool shouldPrintResult = true); // In cpp file
 
-        void printResult(std::string additional = ""); // In cpp file
+        void printResult(const std::string &additional = ""); // In cpp file
 
     protected:
         template<typename F>
