@@ -15,7 +15,7 @@ int main(int argc, char **argv) {
     if (!cmd.process(argc, argv)) {
         return 1;
     }
-    { CopphicContender<1, 4, true, uint32_t, cophobic::poly_bucketer<2>>(N, 16, 1 << 17).run(); }
+    { CopphicContender<1, 4, true, uint32_t, cophobic::poly_bucketer<2>>(N, 1.9, 1 << 17).run(); }
     { RustPhastContender(N, 8, 300).run(); }
 
     return 0;
