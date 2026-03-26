@@ -30,7 +30,6 @@ public:
     }
 
     std::string name() override {
-        bucket_t dummy;
         return std::string("CoPHOBIC")
                + " target_space=" + std::to_string(target_space)
                + " exp_part_size=" + std::to_string(exp_part_size)
