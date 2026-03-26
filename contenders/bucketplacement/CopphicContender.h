@@ -36,7 +36,7 @@ public:
                + " scramble_padding_bytes=" + std::to_string(scramble_padding_bytes)
                + " padding_bits=" + std::to_string(padding_bits)
                + " min_max=" + std::string(min_max ? "true" : "false")
-               + " bucket_t_bits=" + std::to_string(sizeof(bucket_t) * 8)
+               + " bucket_bits=" + std::to_string(sizeof(bucket_t) * 8)
                + " bucketer=" + bucketer_t::name();
     }
 
