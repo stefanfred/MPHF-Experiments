@@ -58,6 +58,9 @@ endif()
 add_subdirectory(extlib/sichash)
 target_link_libraries(PerfectHashingCompetitors INTERFACE SicHash)
 
+add_subdirectory(extlib/cophobic)
+target_link_libraries(PerfectHashingCompetitors INTERFACE CoPHOBIC)
+
 add_subdirectory(extlib/morphishash)
 target_link_libraries(PerfectHashingCompetitors INTERFACE MorphisHash)
 
@@ -176,3 +179,7 @@ target_compile_features(TableMorphisHash PRIVATE cxx_std_20)
 add_executable(TablePHast src/tablePHast.cpp)
 target_link_libraries(TablePHast PRIVATE PerfectHashingCompetitors Sux)
 target_compile_features(TablePHast PRIVATE cxx_std_20)
+
+add_executable(TableCopphic src/tableCopphic.cpp)
+target_link_libraries(TableCopphic PRIVATE PerfectHashingCompetitors Sux)
+target_compile_features(TableCopphic PRIVATE cxx_std_20)

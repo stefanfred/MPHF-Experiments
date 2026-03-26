@@ -34,6 +34,8 @@
 #ifdef SIMD
 #include "recsplit/SIMDRecSplitContender.h"
 #include "shockhash/ShockHashSimdContender.h"
+#include "bucketplacement/CopphicContender.h"
+
 #endif
 
 int main(int argc, char** argv) {
@@ -68,6 +70,7 @@ int main(int argc, char** argv) {
     bool consensus = false;
     bool morphisHash = false;
     bool morphisHashFlat = false;
+    bool cophobic = false;
     bool minimalOnly = false;
 
     tlx::CmdlineParser cmd;
@@ -109,9 +112,14 @@ int main(int argc, char** argv) {
     cmd.add_flag("gpuPhobic", gpuPhobic, "Execute Phobic on the GPU benchmark");
     cmd.add_flag("fiPS", fiPS, "Execute FiPS benchmark");
     cmd.add_flag("consensus", consensus, "Execute Consensus benchmark");
+    cmd.add_flag("cophobic", cophobic, "Execute cophobic benchmark");
 
     if (!cmd.process(argc, argv)) {
         return 1;
+    }
+
+    if(cophobic) {
+        copphicContenderRunner(N);
     }
     if (rustFmphContender) {
         rustFmphContenderRunner(N);
