@@ -58,3 +58,6 @@
 	path = extlib/morphishash
 	url = https://github.com/stefanfred/MorphisHash.git
 	branch = main
+[submodule "extlib/cophobic"]
+	path = extlib/cophobic
+	url = https://github.com/stefanfred/cophobic.git
