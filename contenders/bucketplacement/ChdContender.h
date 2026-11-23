@@ -76,6 +76,15 @@ class ChdContender : public Contender {
             };
             doPerformTest(keys, x);
         }
+
+        size_t lookup(std::string &key) override {
+            auto x = [&] (std::string &key) {
+                return cmph_search(mphf, key.c_str(), key.length());
+            };
+            return x(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void chdContenderRunner(size_t N, double loadFactor);

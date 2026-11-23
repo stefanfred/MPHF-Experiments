@@ -54,6 +54,15 @@ class RustFmphGoContender : public RustContender {
             doPerformTest(keys, x);
         }
 
+        size_t lookup(std::string &key) override {
+            auto x = [&] (std::string &key) {
+                return queryFmphGo(rustStruct, key.c_str(), key.length());
+            };
+            return x(key);
+        }
+
+        bool hasLookup() const override { return true; }
+
 };
 
 void rustFmphGoContenderRunner(size_t N);

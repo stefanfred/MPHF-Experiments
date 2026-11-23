@@ -46,6 +46,12 @@ class FchContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, fchFunction);
         }
+
+        size_t lookup(std::string &key) override {
+            return fchFunction(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void fchPtHashContenderRunner(size_t N);

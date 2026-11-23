@@ -41,6 +41,12 @@ class FiPSContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, *fips);
         }
+
+        size_t lookup(std::string &key) override {
+            return (*fips)(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void fiPSContenderRunner(size_t N);

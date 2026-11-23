@@ -52,6 +52,12 @@ class GpuPhobicContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, f);
         }
+
+        size_t lookup(std::string &key) override {
+            return f(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void gpuPhobicContenderRunner(size_t N);

@@ -51,6 +51,12 @@ class PartitionedPTHashContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, pthashFunction);
         }
+
+        size_t lookup(std::string &key) override {
+            return pthashFunction(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void partitionedPtHashContenderRunner(size_t N, double loadFactor, bool minimalOnly);

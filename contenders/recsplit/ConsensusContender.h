@@ -37,6 +37,12 @@ class ConsensusContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, *consensus);
         }
+
+        size_t lookup(std::string &key) override {
+            return (*consensus)(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void consensusContenderRunner(size_t N);

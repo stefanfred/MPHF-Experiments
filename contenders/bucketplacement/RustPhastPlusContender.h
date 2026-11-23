@@ -51,6 +51,14 @@ class RustPhastPlusContender : public RustContender {
                 return queryPhastPlus(rustStruct, key.c_str(), key.length()); };
             doPerformTest(keys, x);
         }
+
+        size_t lookup(std::string &key) override {
+            auto x = [&] (std::string &key) {
+                return queryPhastPlus(rustStruct, key.c_str(), key.length()); };
+            return x(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void rustPHastPlusContenderRunner(size_t N);

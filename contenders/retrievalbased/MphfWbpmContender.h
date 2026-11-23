@@ -54,6 +54,15 @@ class MphfWbpmContender : public Contender {
             };
             doPerformTest(keys, x);
         }
+
+        size_t lookup(std::string &key) override {
+            auto x = [&] (std::string &key) {
+                return MPHFQuery(mphfq, key.data(), key.length());
+            };
+            return x(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void mphfWbpmContenderRunner(size_t N);

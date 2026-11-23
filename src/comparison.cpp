@@ -1,213 +1,108 @@
 #include <tlx/cmdline_parser.hpp>
+#include <iostream>
+#include <sstream>
+#include <map>
+#include <set>
 
-#include "fingerprinting/BBHashContender.h"
-#include "retrievalbased/SicHashContender.h"
-#include "bucketplacement/PTHashContender.h"
-#include "recsplit/RecSplitContender.h"
-#include "recsplit/RecSplitRotateContender.h"
-#include "retrievalbased/MphfWbpmContender.h"
-#include "shockhash/ShockHashContender.h"
-#include "bucketplacement/PartitionedPTHashContender.h"
-#include "fingerprinting/RustFmphContender.h"
-#include "fingerprinting/RustFmphGoContender.h"
-#include "bucketplacement/RustPhastContender.h"
-#include "bucketplacement/RustPtrHashContender.h"
-#include "shockhash/BipartiteShockHashContender.h"
-#include "bucketplacement/FchContender.h"
-#include "bucketplacement/PhobicContender.h"
-#include "recsplit/ConsensusContender.h"
-#include "shockhash/BipartiteShockHashFlatContender.h"
-#include "fingerprinting/FiPSContender.h"
-#include "bucketplacement/ChdContender.h"
-#include "retrievalbased/BdzContender.h"
-#include "retrievalbased/BmzContender.h"
-#include "retrievalbased/ChmContender.h"
-#include "bucketplacement/FchCmphContender.h"
-#include "shockhash/MorphisHashContender.h"
-#include "shockhash/MorphisHashFlatContender.h"
-#include "bucketplacement/RustPhastPlusWrappedContender.h"
+#include "Contender.h"
+#include "Registry.h"
 
-#ifdef HAS_VULKAN
-#include "bucketplacement/GpuPhobicContender.h"
-#endif
-
-#ifdef SIMD
-#include "recsplit/SIMDRecSplitContender.h"
-#include "shockhash/ShockHashSimdContender.h"
-#endif
+template <typename T>
+static std::vector<T> parseList(const std::string &s) {
+    std::vector<T> result;
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        if (item.empty()) continue;
+        if constexpr (std::is_floating_point_v<T>) {
+            result.push_back(std::stod(item));
+        } else {
+            result.push_back(std::stoull(item));
+        }
+    }
+    return result;
+}
 
 int main(int argc, char** argv) {
-    double loadFactor = 0.8;
-    size_t N = 5e6;
-    bool recsplit = false;
-    bool simdrecsplit = false;
-    bool recsplitRotate = false;
-    bool mphfWbpm = false;
-    bool bbhash = false;
-    bool sichash = false;
-    bool pthash = false;
-    bool partitionedPthash = false;
-    bool shockhash = false;
-    bool chd = false;
-    bool bdz = false;
-    bool bmz = false;
-    bool chm = false;
-    bool fchCmph = false;
-    bool fchPtHash = false;
-    bool rustFmphContender = false;
-    bool rustFmphGoContender = false;
-    bool rustPhastContender = false;
-    bool rustPhastPlus = false;
-    bool rustPtrHashContender = false;
-    bool sichashOnlyPartial = false;
-    bool bipartiteShockHash = false;
-    bool gpuPhobic = false;
-    bool densePartitionedPtHash = false;
-    bool bipartiteShockHashFlat = false;
-    bool fiPS = false;
-    bool consensus = false;
-    bool morphisHash = false;
-    bool morphisHashFlat = false;
-    bool minimalOnly = false;
+    RunConfig config;
+    std::string alphaList = "0.8";
+    std::string kList = "1";
+    bool all = false;
+    bool list = false;
+    std::map<std::string, bool> selected;
 
     tlx::CmdlineParser cmd;
-    cmd.add_double('l', "loadFactor", loadFactor, "Load Factor");
-    cmd.add_bytes('n', "numKeys", N, "Number of objects");
+    cmd.add_string('l', "loadFactor", alphaList,
+                   "Load factor alpha = N/(k*M); comma separated list, e.g. 0.8,0.9,1 (default 0.8)");
+    cmd.add_string('k', "k", kList,
+                   "Keys per output position; comma separated list, e.g. 1,4,8 (default 1)");
+    cmd.add_bytes('n', "numKeys", config.N, "Number of objects");
     cmd.add_bytes('q', "numQueries", Contender::numQueries, "Number of queries to perform");
     cmd.add_bytes('t', "numThreads", Contender::numThreads, "Number of threads to run benchmarks with");
     cmd.add_bytes('Q', "numQueryThreads", Contender::numQueryThreads, "Number of threads to run queries with");
-    cmd.add_flag('M', "minimalOnly", minimalOnly, "Skip generation of non-minimal variants in case the method supports both");
+    cmd.add_flag('M', "minimalOnly", config.minimalOnly,
+                 "Skip generation of non-minimal variants in case the method supports both");
     cmd.add_flag('T', "skipTests", Contender::skipTests, "Skip testing PHF for validity");
     cmd.add_bytes('s', "seed", Contender::seed, "Seed for pseudo-number generator");
+    cmd.add_flag("sichashOnlyPartial", config.sichashOnlyPartial,
+                 "Ignore fast ribbon retrieval configurations and test fewer thresholds");
+    cmd.add_flag("staticSet", Contender::staticSet,
+                 "Additionally benchmark a static hash set (bins of k fingerprints) on top of each contender "
+                 "that exposes a per-key lookup. Use k=8 (64-bit fingerprints) or k=16 (32-bit) for cache-line bins.");
+    cmd.add_bytes("setQueries", Contender::numSetQueries, "Number of queries per static set measurement");
+    cmd.add_bytes("setWordBits", Contender::setWordBits, "Fingerprint width of the static set: 32 or 64");
+    cmd.add_flag('a', "all", all, "Run every contender that supports the requested (k, loadFactor) settings");
+    cmd.add_flag("list", list, "List all contenders and which of the requested (k, loadFactor) settings they support");
 
-    cmd.add_flag("recsplit", recsplit, "Execute RecSplit benchmark");
-    cmd.add_flag("simdrecsplit", simdrecsplit, "Execute SIMDRecSplit benchmark");
-    cmd.add_flag("recSplitRotate", recsplitRotate, "Execute RecSplit benchmark with rotation fitting");
-    cmd.add_flag("mphfWbpm", mphfWbpm, "Execute mphfWbpm benchmark");
-    cmd.add_flag("bbhash", bbhash, "Execute bbhash benchmark");
-    cmd.add_flag("sichash", sichash, "Execute sichash benchmark");
-    cmd.add_flag("shockhash", shockhash, "Execute shockhash benchmark");
-    cmd.add_flag("bipartiteShockHash", bipartiteShockHash, "Execute bipartite shockhash benchmark");
-    cmd.add_flag("bipartiteShockHashFlat", bipartiteShockHashFlat, "Execute bipartite shockhash flat benchmark");
-    cmd.add_flag("morphisHash", morphisHash, "Execute bipartite morphisHash benchmark");
-    cmd.add_flag("morphisHashFlat", morphisHashFlat, "Execute bipartite morphisHash flat benchmark");
-    cmd.add_flag("sichashOnlyPartial", sichashOnlyPartial, "Ignore fast ribbon retrieval configurations and test fewer thresholds");
-    cmd.add_flag("pthash", pthash, "Execute pthash benchmark");
-    cmd.add_flag("partitionedPthash", partitionedPthash, "Execute partitioned pthash benchmark");
-    cmd.add_flag("densePartitionedPtHash", densePartitionedPtHash, "Execute dense partitioend PTHash benchmark");
-    cmd.add_flag("chd", chd, "Execute chd benchmark");
-    cmd.add_flag("bdz", bdz, "Execute bdz benchmark");
-    cmd.add_flag("bmz", bmz, "Execute bmz benchmark");
-    cmd.add_flag("chm", chm, "Execute chm benchmark");
-    cmd.add_flag("fchCmph", fchCmph, "Execute fch (cmph) benchmark");
-    cmd.add_flag("fchPtHash", fchPtHash, "Execute fch (PTHash reimplementation) benchmark");
-    cmd.add_flag("rustFmph", rustFmphContender, "Execute rust fmph benchmark");
-    cmd.add_flag("rustFmphGo", rustFmphGoContender, "Execute rust fmph-go benchmark");
-    cmd.add_flag("rustPHast", rustPhastContender, "Execute rust PHast benchmark");
-    cmd.add_flag("rustPHastPlus", rustPhastPlus, "Execute rust PHast+ benchmark");
-    cmd.add_flag("rustPtrHash", rustPtrHashContender, "Execute rust ptrhash benchmark");
-    cmd.add_flag("gpuPhobic", gpuPhobic, "Execute Phobic on the GPU benchmark");
-    cmd.add_flag("fiPS", fiPS, "Execute FiPS benchmark");
-    cmd.add_flag("consensus", consensus, "Execute Consensus benchmark");
+    const auto &contenders = allContenders();
+    for (const ContenderSpec &spec : contenders) {
+        selected[spec.flag] = false;
+        cmd.add_flag(spec.flag, selected[spec.flag], spec.description);
+    }
 
     if (!cmd.process(argc, argv)) {
         return 1;
     }
-    if (rustFmphContender) {
-        rustFmphContenderRunner(N);
+    std::vector<size_t> ks = parseList<size_t>(kList);
+    std::vector<double> alphas = parseList<double>(alphaList);
+    if (ks.empty() || alphas.empty()) {
+        std::cerr << "Need at least one value for k and for loadFactor" << std::endl;
+        return 1;
     }
-    if (rustFmphGoContender) {
-        rustFmphGoContenderRunner(N);
+
+    if (list) {
+        for (const ContenderSpec &spec : contenders) {
+            std::cout << spec.flag << "\t";
+            for (size_t k : ks) {
+                for (double alpha : alphas) {
+                    if (spec.supports(k, alpha)) {
+                        std::cout << " (k=" << k << ",alpha=" << alpha << ")";
+                    }
+                }
+            }
+            std::cout << std::endl;
+        }
+        return 0;
     }
-    if (rustPhastContender) {
-        rustPHastContenderRunner(N);
-    }
-    if (rustPhastPlus) {
-        rustPHastPlusWrappedContenderRunner(N);
-    }
-    if (rustPtrHashContender) {
-        rustPtrHashContenderRunner(N);
-    }
-    if (recsplit) {
-        recSplitContenderRunner(N);
-    }
-    if (simdrecsplit) {
-        #ifdef SIMD
-            simdRecSplitContenderRunner(N);
-        #else
-            std::cerr<<"SIMDRecSplit competitor requested but not compiled into this binary"<<std::endl;
-        #endif
-    }
-    if (recsplitRotate) {
-        recSplitRotateContenderRunner(N);
-    }
-    if (bbhash) {
-        bbHashContenderRunner(N);
-    }
-    if (chd) {
-        chdContenderRunner(N, loadFactor);
-    }
-    if (bdz) {
-        bdzContenderRunner(N, loadFactor);
-    }
-    if (bmz) {
-        bmzContenderRunner(N, loadFactor);
-    }
-    if (chm) {
-        chmContenderRunner(N, loadFactor);
-    }
-    if (fchCmph) {
-        fchCmphContenderRunner(N, loadFactor);
-    }
-    if (fchPtHash) {
-        fchPtHashContenderRunner(N);
-    }
-    if (sichash) {
-        sicHashContenderRunner(N, loadFactor, minimalOnly, sichashOnlyPartial);
-    }
-    if (shockhash) {
-        #ifdef SIMD
-            shockHashSimdContenderRunner(N);
-        #else
-            shockHashContenderRunner(N);
-        #endif
-    }
-    if (bipartiteShockHash) {
-        bipartiteShockHashContenderRunner(N);
-    }
-    if (bipartiteShockHashFlat) {
-        bipartiteShockHashFlatContenderRunner(N);
-    }
-    if (morphisHash) {
-        morphisHashContenderRunner(N);
-    }
-    if (morphisHashFlat) {
-        morphisHashFlatContenderRunner(N);
-    }
-    if (pthash) {
-        ptHashContenderRunner(N, loadFactor, minimalOnly);
-    }
-    if (partitionedPthash) {
-        partitionedPtHashContenderRunner(N, loadFactor, minimalOnly);
-    }
-    if (densePartitionedPtHash) {
-        PhobicContenderRunner(N);
-    }
-    if (gpuPhobic) {
-        #ifdef HAS_VULKAN
-            gpuPhobicContenderRunner(N);
-        #else
-            std::cerr<<"Vulkan competitor requested but not compiled into this binary"<<std::endl;
-        #endif
-    }
-    if (mphfWbpm) {
-        mphfWbpmContenderRunner(N);
-    }
-    if (fiPS) {
-        fiPSContenderRunner(N);
-    }
-    if (consensus) {
-        consensusContenderRunner(N);
+
+    for (size_t k : ks) {
+        for (double alpha : alphas) {
+            config.k = k;
+            config.alpha = alpha;
+            for (const ContenderSpec &spec : contenders) {
+                if (!all && !selected[spec.flag]) {
+                    continue;
+                }
+                if (!spec.supports(k, alpha)) {
+                    if (!all) {
+                        std::cerr << "Skipping " << spec.flag << ": does not support k=" << k
+                                  << ", loadFactor=" << alpha << std::endl;
+                    }
+                    continue;
+                }
+                spec.run(config);
+            }
+        }
     }
     return 0;
 }

@@ -42,6 +42,12 @@ class BipartiteShockHashContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, *shockHash);
         }
+
+        size_t lookup(std::string &key) override {
+            return (*shockHash)(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void bipartiteShockHashContenderRunner(size_t N);

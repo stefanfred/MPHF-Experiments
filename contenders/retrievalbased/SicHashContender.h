@@ -46,6 +46,12 @@ class SicHashContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, *perfectHashing);
         }
+
+        size_t lookup(std::string &key) override {
+            return (*perfectHashing)(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void sicHashContenderRunner(size_t N, double loadFactor, bool minimalOnly, bool onlyPartial);

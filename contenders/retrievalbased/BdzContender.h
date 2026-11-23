@@ -75,6 +75,15 @@ class BdzContender : public Contender {
             };
             doPerformTest(keys, x);
         }
+
+        size_t lookup(std::string &key) override {
+            auto x = [&] (std::string &key) {
+                return cmph_search(mphf, key.c_str(), key.length());
+            };
+            return x(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void bdzContenderRunner(size_t N, double loadFactor);

@@ -80,3 +80,43 @@ We refer to [Docker.md](/Docker.md) for details on how to use this repository wi
 ### License
 
 This code is licensed under the [GPLv3](/LICENSE).
+
+## k-perfect hashing and static hash sets (branch `kphf-and-static-sets`)
+
+This branch merges [engineering-k-perfect-hashing](https://github.com/stefanfred/engineering-k-perfect-hashing)
+and [static-hash-sets](https://github.com/RagnarGrootKoerkamp/static-hash-sets) into the framework.
+
+### k > 1 and load factors
+Every `Contender` has a `k_contender` (default 1) and a load factor `alpha = N / (k * M)`, where `M` is the number of bins.
+The result line contains `k=` next to `loadFactor=`. `--k` and `--loadFactor` take comma separated lists.
+Every method is listed in `src/registry.cpp` with a `supports(k, alpha)` predicate, e.g. RecSplit only supports `k=1, alpha=1`,
+BDZ only `k=1, alpha<=0.8`, k-RecSplit/Hash-Displace/PaCHash/threshold-based bumping `alpha=1` and a compiled-in `k`
+(see `lib/DispatchK.h`), and CHD from cmph supports `k>=2, alpha<1`. Unsupported combinations are skipped.
+
+```bash
+./Comparison --list -k 1,8 -l 0.9,1                   # what runs for which setting
+./Comparison --all -k 1,4,8,16 -l 0.8,0.9,0.95,1 -n 5M # everything that supports a setting
+./Comparison --kChd --hashDisplace -k 8 -l 0.9,1       # explicit selection (old flags still work)
+```
+Old invocations (`--pthash --minimalOnly --loadFactor 0.9`) behave as before. Variants that build a minimal function on
+top of a sparser table print `loadFactor=1`, so they end up in the `alpha=1` group.
+
+### Pareto fronts
+`scripts/pareto.sh build` sweeps a (k, alpha) grid and `scripts/pareto.py results.log [--csv] [--plot dir] [--y construction]`
+computes one Pareto front (bits per key vs. query or construction time) per (k, alpha) over all contenders and configurations.
+
+### Static hash sets
+`./Comparison --staticSet -k 8` builds, for every contender that exposes a per-key `lookup` (all but the GPU RecSplit),
+a static hash set: the contender's (k-)PHF maps a key to a bin of `k` fingerprints that is scanned (auto-vectorized)
+for the fingerprint of the key. `k * wordBits / 8 = 64` gives one cache line per bin (`k=8` with 64-bit, `k=16` with
+`--setWordBits 32`); `k=4` with 64-bit fingerprints matches an AVX2 register. Any other `k` works but is not aligned.
+Output lines are `SETRESULT` with `nsPerQuery` for 1%/50%/99% positive queries, in a plain loop and with the bin prefetched
+a few queries ahead, plus total `bitsPerElement` (PHF + fingerprints). `scripts/pareto.py --set` computes the fronts.
+Note that queries are strings, so hashing of the key is part of the measured time.
+
+The Rust sets that do not rely on perfect hashing are in `static-hash-sets/` (hashbrown/SwissTable, eager/lazy Cuckoo,
+Bloom/Cuckoo filters, fph-table, MapEmbed, TinyPtr, TPHT, a mock set measuring memory throughput):
+`cd static-hash-sets && cargo run -r -F extc,ext`. The PHF-based Rust sets (k-PtrHash set, PtrHash/PHast set,
+engineering-kphf wrappers) were dropped since every PHF is a contender in the C++ benchmark now.
+The `tinyptr`/`tpht` third-party sources were not registered as submodules in the original repository, so they are
+missing here and the `tpht` feature is off.

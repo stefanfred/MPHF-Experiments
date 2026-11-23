@@ -1,0 +1,8 @@
+[workspace]
+members = ["ext/mapembed-sys", "ext/fph-table-sys", "static_hash_set", "ext/tpht-sys", "ext/tinyptr-sys"]
+resolver = "3"
+
+[profile.release]
+debug = true
+lto = true
+codegen-units = 1

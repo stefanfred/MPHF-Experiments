@@ -17,6 +17,7 @@ target_include_directories(PerfectHashingCompetitors SYSTEM INTERFACE extlib/BBH
 target_include_directories(PerfectHashingCompetitors SYSTEM INTERFACE extlib/fch/include)
 target_link_libraries(PerfectHashingCompetitors INTERFACE dl)
 target_include_directories(PerfectHashingCompetitors INTERFACE contenders)
+target_include_directories(PerfectHashingCompetitors INTERFACE contenders/kphf)
 
 add_subdirectory(extlib/tlx SYSTEM)
 target_link_libraries(PerfectHashingCompetitors INTERFACE tlx)
@@ -97,6 +98,18 @@ target_link_libraries(PerfectHashingCompetitors INTERFACE PTHASH)
 add_subdirectory(extlib/consensus)
 target_link_libraries(PerfectHashingCompetitors INTERFACE ConsensusRecSplit)
 
+#################### k-perfect hashing libraries (k > 1) ####################
+if(NOT TARGET gcem)
+    add_library(gcem INTERFACE)
+    target_include_directories(gcem SYSTEM INTERFACE extlib/gpurecsplit/extlib/gcem/include)
+endif()
+add_library(KphfCompetitors INTERFACE)
+target_include_directories(KphfCompetitors INTERFACE
+        include/common include/pachash include/recsplit include/hash-displace include/threshold-based-bumping)
+target_link_libraries(KphfCompetitors INTERFACE gcem Sux FiPS SimpleRibbon ConsensusRecSplit ByteHamsterUtil)
+target_compile_features(KphfCompetitors INTERFACE cxx_std_23)
+target_link_libraries(PerfectHashingCompetitors INTERFACE KphfCompetitors)
+
 #################### CUDA Competitor setup ####################
 if (CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
@@ -106,7 +119,7 @@ if (CMAKE_CUDA_COMPILER)
     target_include_directories(PerfectHashingCompetitorsCuda INTERFACE contenders)
 endif()
 
-add_library(Contender SHARED lib/Contender.cpp lib/RustContender.cpp)
+add_library(Contender SHARED lib/Contender.cpp lib/RustContender.cpp lib/StaticSetBenchmark.cpp)
 target_include_directories(Contender PUBLIC lib)
 target_link_libraries(Contender PRIVATE ByteHamsterUtil tlx RustCompetitors)
 
@@ -130,9 +143,10 @@ if (CMAKE_CUDA_COMPILER)
 endif()
 
 ################### Benchmark build targets ###################
-add_executable(Comparison src/comparison.cpp)
+add_executable(Comparison src/comparison.cpp src/registry.cpp)
+target_include_directories(Comparison PRIVATE lib)
 target_link_libraries(Comparison PRIVATE PerfectHashingCompetitors PerfectHashingCompetitorParetoRunners Sux)
-target_compile_features(Comparison PRIVATE cxx_std_20)
+target_compile_features(Comparison PRIVATE cxx_std_23)
 
 if (CMAKE_CUDA_COMPILER)
     add_executable(ComparisonCuda src/comparisonCuda.cu)

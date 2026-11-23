@@ -42,6 +42,12 @@ class MorphisHashFlatContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, *morphisHashFlat);
         }
+
+        size_t lookup(std::string &key) override {
+            return (*morphisHashFlat)(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void morphisHashFlatContenderRunner(size_t N);

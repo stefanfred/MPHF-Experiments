@@ -50,6 +50,15 @@ class RustFmphContender : public RustContender {
             doPerformTest(keys, x);
         }
 
+        size_t lookup(std::string &key) override {
+            auto x = [&] (std::string &key) {
+                return queryFmph(rustStruct, key.c_str(), key.length());
+            };
+            return x(key);
+        }
+
+        bool hasLookup() const override { return true; }
+
 };
 
 void rustFmphContenderRunner(size_t N);

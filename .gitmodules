@@ -58,3 +58,12 @@
 	path = extlib/morphishash
 	url = https://github.com/stefanfred/MorphisHash.git
 	branch = main
+[submodule "static-hash-sets/ext/fph-table-sys/third_party/fph-table"]
+	path = static-hash-sets/ext/fph-table-sys/third_party/fph-table
+	url = https://github.com/renzibei/fph-table
+[submodule "static-hash-sets/ext/mapembed-sys/third_party/mapembed"]
+	path = static-hash-sets/ext/mapembed-sys/third_party/mapembed
+	url = https://github.com/mapembed/mapembed
+[submodule "static-hash-sets/ext/hashbrown"]
+	path = static-hash-sets/ext/hashbrown
+	url = https://github.com/RagnarGrootKoerkamp/hashbrown

@@ -113,6 +113,9 @@ void Contender::run(bool shouldPrintResult) {
             queryTimeMilliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
         }
     }
+    if (staticSet) {
+        runStaticSetBenchmark(keys, prng);
+    }
     if (shouldPrintResult) {
         printResult();
     }
@@ -135,6 +138,7 @@ void Contender::printResult(const std::string &additional) {
               << " cacheMissesPerQuery=" << (totalQueries > 0 ? (1.0f * queryCacheMisses / totalQueries) : 0)
               << " N=" << N
               << " loadFactor=" << loadFactor
+              << " k=" << k_contender
               << " threads=" << numThreads
               << " queryThreads=" << numQueryThreads
               << additional
@@ -146,3 +150,6 @@ size_t Contender::numThreads = 1;
 size_t Contender::numQueryThreads = 1;
 size_t Contender::seed = 0;
 bool Contender::skipTests = false;
+bool Contender::staticSet = false;
+size_t Contender::numSetQueries = 2e6;
+size_t Contender::setWordBits = 64;

@@ -42,6 +42,12 @@ class SIMDRecSplitContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, *recSplit);
         }
+
+        size_t lookup(std::string &key) override {
+            return (*recSplit)(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void simdRecSplitContenderRunner(size_t N);

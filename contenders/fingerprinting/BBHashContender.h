@@ -65,6 +65,15 @@ class BBHashContender : public Contender {
             };
             doPerformTest(keys, x);
         }
+
+        size_t lookup(std::string &key) override {
+            auto x = [&] (std::string &key) {
+                return bbhash->lookup(bytehamster::util::MurmurHash64(key));
+            };
+            return x(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void bbHashContenderRunner(size_t N);

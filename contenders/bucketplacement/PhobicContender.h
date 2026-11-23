@@ -59,6 +59,12 @@ class PhobicContender : public Contender {
         void performTest(const std::span<std::string> keys) override {
             doPerformTest(keys, pthashFunction);
         }
+
+        size_t lookup(std::string &key) override {
+            return pthashFunction(key);
+        }
+
+        bool hasLookup() const override { return true; }
 };
 
 void PhobicContenderRunner(size_t N);
