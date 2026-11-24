@@ -134,9 +134,6 @@ impl Score {
     }
 }
 
-/// Fixed point scale of the natural weights (nats * 2^30).
-const NATURAL_SCALE: f64 = (1u64 << 30) as f64;
-
 /// Truncated exponential sums `S_e(lambda) = sum_{m<=e} lambda^m / m!` for
 /// `e = 0..=k`, together with the last terms `lambda^e / e!`.
 fn truncated_exp_sums(lambda: f64, k: usize) -> (Vec<f64>, Vec<f64>) {
@@ -170,7 +167,7 @@ fn truncated_exp_sums(lambda: f64, k: usize) -> (Vec<f64>, Vec<f64>) {
 ///
 /// `hist[l]` is the number of bins with load `l`, and `remaining` the number of
 /// keys that are not yet placed (or bumped).
-pub fn natural_weights<const K: usize>(hist: &[usize], remaining: usize) -> [i64; K] {
+pub fn natural_weights<const K: usize>(hist: &[usize], remaining: usize) -> [f64; K] {
     debug_assert_eq!(hist.len(), K + 1);
     let target = remaining as f64;
     // Expected number of keys that land in bins, for a given lambda.
@@ -201,7 +198,7 @@ pub fn natural_weights<const K: usize>(hist: &[usize], remaining: usize) -> [i64
     std::array::from_fn(|l| {
         let e = K - l;
         // ln(S_e / S_{e-1}), written with ln_1p so tiny ratios do not vanish.
-        ((terms[e] / sums[e - 1]).ln_1p() * NATURAL_SCALE).round() as i64
+        (terms[e] / sums[e - 1]).ln_1p()
     })
 }
 
@@ -361,7 +358,8 @@ impl<const MODE: u8, const K: usize, const SCORE: u8> KptrHash<MODE, K, SCORE> {
             // eprintln!("Start construction");
 
             // Score functions: Use 2^i by default.
-            let mut score_fn: [i64; K] = std::array::from_fn(|i| 1i64 << i);
+            // (Computed in f64, since `1i64 << i` overflows for K > 62.)
+            let mut score_fn: [f64; K] = std::array::from_fn(|i| 2f64.powi(i as i32));
 
             // State for the natural score: number of bins per load, and the number of
             // keys in buckets that are not processed yet. The weights depend on both,
@@ -406,7 +404,7 @@ impl<const MODE: u8, const K: usize, const SCORE: u8> KptrHash<MODE, K, SCORE> {
                 }
 
                 // hash all keys with all seeds, and collect bin size statistics
-                let mut best = (usize::MAX, i64::MAX, usize::MAX);
+                let mut best = (usize::MAX, f64::INFINITY, usize::MAX);
 
                 let mut mask = u128::MAX;
                 let mut max_count: usize;
@@ -485,7 +483,7 @@ impl<const MODE: u8, const K: usize, const SCORE: u8> KptrHash<MODE, K, SCORE> {
                         }
                     }
 
-                    let score = if !greedy {
+                    let score: f64 = if !greedy {
                         for i in 1..=K {
                             counts[i] += counts[i - 1];
                         }
@@ -493,10 +491,10 @@ impl<const MODE: u8, const K: usize, const SCORE: u8> KptrHash<MODE, K, SCORE> {
 
                         // inner product with weights
                         std::iter::zip(&counts[..K], &score_fn)
-                            .map(|(&c, &w)| c * w)
+                            .map(|(&c, &w)| c as f64 * w)
                             .sum()
                     } else {
-                        0
+                        0.0
                     };
                     if score < best.1 {
                         best = (0, score, seed);
@@ -712,8 +710,8 @@ mod test {
             })
             .unwrap();
         let (s, _) = truncated_exp_sums(lambda, K);
-        let w0 = ((s[4] / s[3]).ln() * NATURAL_SCALE) as f64;
-        let rel = (w[0] as f64 - w0).abs() / w0;
+        let w0 = (s[4] / s[3]).ln();
+        let rel = (w[0] - w0).abs() / w0;
         assert!(rel < 0.02, "w[0] = {}, brute force {w0}", w[0]);
     }
 
