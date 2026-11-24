@@ -162,9 +162,42 @@ private:
     uint64_t n;
     std::array<uint64_t, n_thresholds> avail_thresholds;
     std::vector<std::pair<uint64_t, Consensus>> layers;
+    /** True if keys were left over after the bin budget was used up and had to be repaired into empty slots. */
+    bool repaired = false;
     fips::FiPS<> phf;
     mutable sux::bits::EliasFano<> gaps;
 public:
+    /**
+     * Number of bins of the output range: ceil(n/k) for alpha=1, otherwise ceil(n/k)/alpha (rounded down,
+     * like the output range of the benchmark framework), but never less than ceil(n/k).
+     */
+    static uint64_t totalBuckets(uint64_t n, double loadFactor) {
+        uint64_t minimal = (n + k - 1) / k;
+        if (loadFactor >= 1.0) {
+            return minimal;
+        }
+        return std::max(minimal, static_cast<uint64_t>(double(minimal) / loadFactor));
+    }
+
+    /**
+     * Number of bins of the next layer that gets curKeys keys when `remaining` bins of the budget are left.
+     * The layer gets curKeys/(k*overload) bins, so overload > 1 overloads the bins and overload < 1 (only useful
+     * for alpha < 1) underloads them. The layer takes the rest of the budget if that is needed to fit the keys,
+     * or if the keys that cannot be placed in this layer even if all of its bins were full would overload the
+     * rest of the budget more than this layer.
+     */
+    static uint64_t layerBuckets(uint64_t curKeys, uint64_t remaining, double overload) {
+        double overloadBucketSize = k * overload;
+        uint64_t curBuckets = std::max<uint64_t>(1, std::ceil(double(curKeys) / overloadBucketSize));
+        if (curBuckets >= remaining) {
+            return remaining;
+        }
+        if (curKeys > k * curBuckets
+                && double(curKeys - k * curBuckets) / double(remaining - curBuckets) > overloadBucketSize) {
+            return remaining;
+        }
+        return curBuckets;
+    }
 
     uint64_t operator()(const std::string &key) const {
         return operator()(Hash128(key));
@@ -186,7 +219,19 @@ public:
             offset += cur_buckets;
         }
 
+        if (!repaired) {
+            return 0; // Only reachable for keys that were not in the input set
+        }
         return gaps.select(phf(hash.hi ^ hash.lo));
+    }
+
+    /** Number of keys that were placed by the repair step (FiPS into the empty slots). */
+    [[nodiscard]] size_t numRepairedKeys() const {
+        return repaired ? phf.getN() : 0;
+    }
+
+    [[nodiscard]] size_t numLayers() const {
+        return layers.size();
     }
 
     size_t count_bits() const {
@@ -198,8 +243,8 @@ public:
             - sizeof(avail_thresholds) * 8 // Lookup table independent of keys, could actually be static constexpr
             + layers.capacity() * sizeof(layers[0])
             + s
-            + phf.getBits() - sizeof(phf) * 8
-            + gaps.bitCount() - sizeof(gaps) * 8;
+            + (repaired ? phf.getBits() - sizeof(phf) * 8 : 0)
+            + (repaired ? gaps.bitCount() - sizeof(gaps) * 8 : 0);
     }
 
 private:
@@ -326,20 +371,21 @@ private:
     ThresholdBasedBumpingConsensus() : n(0), gaps({}, 0) {
     }
 
-    explicit ThresholdBasedBumpingConsensus(const std::vector<std::string> &keys, double overload)
-            : ThresholdBasedBumpingConsensus(hashKeys(keys, overload), overload) {
+    /**
+     * @param overload gamma: every layer gets (number of keys)/(k*gamma) bins.
+     * @param loadFactor alpha: the output range has n/(k*alpha) bins. Layers are added until all keys are placed
+     *        or the bins are used up. Only keys that are left over after that are repaired into empty slots
+     *        (FiPS + Elias-Fano). For alpha=1 this is the minimal k-perfect hash function from the paper,
+     *        for alpha<1 the repair step is not needed if gamma is large enough that a layer fills its bins to
+     *        more than alpha on average.
+     */
+    explicit ThresholdBasedBumpingConsensus(const std::vector<std::string> &keys, double overload,
+                                            double loadFactor = 1.0)
+            : ThresholdBasedBumpingConsensus(hashKeys(keys, overload, loadFactor), overload, loadFactor) {
     }
 
-    static std::vector<Key> hashKeys(const std::vector<std::string> &keys, double overload) {
-        uint64_t total_buckets = (keys.size() + k - 1) / k;
-        double overload_bucket_size = k * overload;
-        uint64_t cur_buckets = std::ceil(keys.size() / overload_bucket_size);
-        if (cur_buckets >= total_buckets) {
-            cur_buckets = total_buckets;
-        } else if ((double)(keys.size() - k * cur_buckets) / (total_buckets - cur_buckets) > overload_bucket_size) {
-            cur_buckets = total_buckets;
-        }
-
+    static std::vector<Key> hashKeys(const std::vector<std::string> &keys, double overload, double loadFactor = 1.0) {
+        uint64_t cur_buckets = layerBuckets(keys.size(), totalBuckets(keys.size(), loadFactor), overload);
         std::vector<Key> hashed_keys;
         hashed_keys.reserve(keys.size());
         for (const auto &key : keys) {
@@ -349,13 +395,13 @@ private:
         return hashed_keys;
     }
 
-    explicit ThresholdBasedBumpingConsensus(std::vector<Key> keys, double overload)
-            : n(keys.size()), gaps({}, 0),
-              avail_thresholds(ThresholdBasedBumping::compute_thresholds<n_thresholds>(k, k * overload)) {
+    explicit ThresholdBasedBumpingConsensus(std::vector<Key> keys, double overload, double loadFactor = 1.0)
+            : n(keys.size()), avail_thresholds(ThresholdBasedBumping::compute_thresholds<n_thresholds>(k, k * overload)),
+              gaps({}, 0) {
+        assert(loadFactor > 0 && loadFactor <= 1.0);
         AllowedImperfectBumping<k, threshold_size> allowedImperfectBumping(overload);
 
-        double overload_bucket_size = k * overload;
-        uint64_t total_buckets = (n + k - 1) / k;
+        uint64_t total_buckets = totalBuckets(n, loadFactor);
 
 #ifdef STATS
         total_keys += n;
@@ -365,14 +411,11 @@ private:
         std::vector<uint64_t> emptySlots;
         std::vector<Hash128> bumped;
         for (uint64_t layer = 0; offset != total_buckets; layer++) {
-            uint64_t remaining = total_buckets - offset;
             size_t cur_keys = layer > 0 ? bumped.size() : keys.size();
-            uint64_t cur_buckets = std::ceil(cur_keys / overload_bucket_size);
-            if (cur_buckets >= remaining) {
-                cur_buckets = remaining;
-            } else if ((double)(cur_keys - k * cur_buckets) / (remaining - cur_buckets) > overload_bucket_size) {
-                cur_buckets = remaining;
+            if (cur_keys == 0) {
+                break; // All keys placed, the rest of the budget stays empty
             }
+            uint64_t cur_buckets = layerBuckets(cur_keys, total_buckets - offset, overload);
 
             if (layer > 0) {
                 keys.clear();
@@ -398,6 +441,10 @@ private:
         bumped_keys += bumped.size();
 #endif
 
+        if (bumped.empty()) {
+            return; // No repair needed
+        }
+        repaired = true;
         std::vector<uint64_t> fallbackKeys;
         for (Hash128 key : bumped) {
             fallbackKeys.push_back(key.hi ^ key.lo);

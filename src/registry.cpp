@@ -56,6 +56,8 @@ static bool phfAnyLoad(size_t k, double alpha) { return k == 1 && alpha > 0 && a
 static bool bdzSupports(size_t k, double alpha) { return k == 1 && alpha > 0 && alpha <= 0.8 + 1e-9; }
 // k-perfect hash functions with compile-time k that are built for (k-)minimal output
 static bool kMinimal(size_t k, double alpha) { return isCompiledK(k) && isOne(alpha); }
+// k-perfect hash functions with compile-time k that support any load factor alpha <= 1
+static bool kAnyLoad(size_t k, double alpha) { return isCompiledK(k) && alpha > 0 && alpha <= 1.0 + 1e-9; }
 // CHD from cmph can be configured for arbitrary k, but never terminates for alpha=1
 static bool kChdSupports(size_t k, double alpha) { return k >= 2 && alpha > 0 && alpha < 0.995; }
 
@@ -138,11 +140,12 @@ const std::vector<ContenderSpec> &allContenders() {
         // ---- k >= 2 ----
         {"kChd", "CHD (cmph) with k keys per bin", kChdSupports,
          [](const RunConfig &c) { kChdContenderRunner(c.N, c.k, c.alpha); }},
-        {"hashDisplace", "Hash-and-displace", kMinimal, RUN_NK(hashDisplaceContenderRunner)},
+        {"hashDisplace", "Hash-and-displace (optimal bucket function, [0,alpha] prefix for alpha<1)", kAnyLoad,
+         [](const RunConfig &c) { hashDisplaceContenderRunner(c.N, c.k, c.alpha); }},
         {"pachash", "PaCHash", [](size_t k, double a) { return k >= 4 && isOne(a); }, RUN_NK(paCHashContenderRunner)},
         {"thresholdBased", "Threshold-based bumping", kMinimal, RUN_NK(thresholdBasedBumpingContenderRunner)},
-        {"thresholdBasedConsensus", "Threshold-based bumping with consensus", kMinimal,
-         RUN_NK(thresholdBasedBumpingConsensusContenderRunner)},
+        {"thresholdBasedConsensus", "Threshold-based bumping with consensus (any alpha, repair only if needed)", kAnyLoad,
+         [](const RunConfig &c) { thresholdBasedBumpingConsensusContenderRunner(c.N, c.k, c.alpha); }},
         {"thresholdBasedOld", "Threshold-based bumping (implementation from the literature)", kMinimal,
          RUN_NK(thresholdBasedBumpingOldContenderRunner)},
         {"kRecSplit", "k-RecSplit", kMinimal, RUN_NK(kRecSplitContenderRunner)},

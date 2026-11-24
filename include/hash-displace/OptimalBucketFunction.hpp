@@ -1,6 +1,9 @@
 #pragma once
 
+#include <array>
+#include <cassert>
 #include <cmath>
+#include <numeric>
 #include <utility>
 #include <vector>
 #include <gcem.hpp>

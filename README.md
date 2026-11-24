@@ -90,8 +90,22 @@ and [static-hash-sets](https://github.com/RagnarGrootKoerkamp/static-hash-sets) 
 Every `Contender` has a `k_contender` (default 1) and a load factor `alpha = N / (k * M)`, where `M` is the number of bins.
 The result line contains `k=` next to `loadFactor=`. `--k` and `--loadFactor` take comma separated lists.
 Every method is listed in `src/registry.cpp` with a `supports(k, alpha)` predicate, e.g. RecSplit only supports `k=1, alpha=1`,
-BDZ only `k=1, alpha<=0.8`, k-RecSplit/Hash-Displace/PaCHash/threshold-based bumping `alpha=1` and a compiled-in `k`
-(see `lib/DispatchK.h`), and CHD from cmph supports `k>=2, alpha<1`. Unsupported combinations are skipped.
+BDZ only `k=1, alpha<=0.8`, k-RecSplit/PaCHash/threshold-based bumping (without consensus) `alpha=1` and a compiled-in `k`
+(see `lib/DispatchK.h`), Hash-Displace and threshold-based bumping with consensus any `alpha<=1` and a compiled-in `k`,
+and CHD from cmph supports `k>=2, alpha<1`. Unsupported combinations are skipped.
+
+#### Non-minimal threshold-based bumping and bucket placement
+- `--thresholdBasedConsensus` with `alpha<1` uses a budget of `ceil(N/k)/alpha` bins. Every layer gets
+  `(keys of the layer)/(k*gamma)` bins (`gamma` is the `overload=` in the name, `gamma<1` is allowed for `alpha<1`).
+  Layers are added until all keys are placed or the budget is used up, and only keys left over after that are
+  repaired into empty slots (FiPS + Elias-Fano, as in the minimal case). No repair structure is built otherwise.
+  Repair is avoided if a layer fills its bins to more than `alpha` on average, i.e. roughly
+  `E[min(Pois(gamma*k), k)] >= alpha*k`, as long as the threshold size is large enough to reach that fill.
+  Since every used bin costs `thresholdSize` bits, the space does not decrease further once `alpha` is below
+  the fill that the layers reach on their own.
+- `--hashDisplace` with `alpha<1` hashes keys to `[0, alpha)` instead of `[0, 1)` of the optimal bucket assignment
+  function and rescales the number of buckets accordingly, i.e., it only uses the `[0, alpha]` prefix of the
+  bucket function for the minimal case, like suggested in the PHOBIC paper.
 
 ```bash
 ./Comparison --list -k 1,8 -l 0.9,1                   # what runs for which setting

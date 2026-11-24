@@ -9,8 +9,12 @@ class HashDisplaceContender : public Contender {
         kphf::HashDisplace::HashDisplace<k, BucketFunction, Encoding> kphf;
         size_t bucketSize;
 
-        HashDisplaceContender(const size_t N, const size_t bucketSize)
-                : Contender(N, k, 1.0), bucketSize(bucketSize) {
+        /**
+         * @param loadFactor alpha = N/(k*M). For alpha < 1, the optimal bucket function only uses its [0, alpha]
+         *        prefix (keys are hashed to [0, alpha) instead of [0, 1)), see OptimalBucketFunction.
+         */
+        HashDisplaceContender(const size_t N, const size_t bucketSize, const double loadFactor = 1.0)
+                : Contender(N, k, loadFactor), bucketSize(bucketSize) {
         }
 
         std::string name() override {
@@ -21,7 +25,7 @@ class HashDisplaceContender : public Contender {
         }
 
         void construct(const std::vector<std::string> &keys) override {
-            kphf = kphf::HashDisplace::HashDisplace<k, BucketFunction, Encoding>(keys, bucketSize);
+            kphf = kphf::HashDisplace::HashDisplace<k, BucketFunction, Encoding>(keys, bucketSize, loadFactor);
         }
 
         size_t sizeBits() override {
@@ -52,4 +56,4 @@ class HashDisplaceContender : public Contender {
         bool hasLookup() const override { return true; }
 };
 
-void hashDisplaceContenderRunner(size_t N, size_t k);
+void hashDisplaceContenderRunner(size_t N, size_t k, double loadFactor = 1.0);

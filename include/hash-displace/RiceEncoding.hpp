@@ -21,7 +21,9 @@ class RiceEncoding {
                 length = 0;
             } else {
                 double phi = (sqrt(5) + 1) / 2;
-                length = std::max(uint64_t(ceil(log2(-log(phi) / log1p(-p)))), uint64_t(0));
+                // Small average seeds (e.g. for load factors < 1) make this negative, so clamp before casting
+                double optimal = ceil(log2(-log(phi) / log1p(-p)));
+                length = optimal > 0 ? uint64_t(optimal) : 0;
             }
             fixed.resize((length * seeds.size() + 7) / 8 + 7);
             fixed.shrink_to_fit();
