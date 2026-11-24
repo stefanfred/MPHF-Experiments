@@ -36,6 +36,7 @@
 #include "kphf/ThresholdBasedBumpingOldContender.hpp"
 #include "kphf/KRecSplitContender.hpp"
 #include "kphf/KPtrHashContender.hpp"
+#include "kphf/ThresholdBasedBumpingSampledContender.hpp"
 
 #ifdef HAS_VULKAN
 #include "bucketplacement/GpuPhobicContender.h"
@@ -149,6 +150,9 @@ const std::vector<ContenderSpec> &allContenders() {
         {"thresholdBased", "Threshold-based bumping", kMinimal, RUN_NK(thresholdBasedBumpingContenderRunner)},
         {"thresholdBasedConsensus", "Threshold-based bumping with consensus (any alpha, repair only if needed)", kAnyLoad,
          [](const RunConfig &c) { thresholdBasedBumpingConsensusContenderRunner(c.N, c.k, c.alpha); }},
+        {"thresholdBasedSampled", "Threshold-based bumping with consensus, thresholds sampled from an optimized distribution",
+         [](size_t k, double a) { return kAnyLoad(k, a) && k <= 128; },
+         [](const RunConfig &c) { thresholdBasedBumpingSampledContenderRunner(c.N, c.k, c.alpha); }},
         {"thresholdBasedOld", "Threshold-based bumping (implementation from the literature)", kMinimal,
          RUN_NK(thresholdBasedBumpingOldContenderRunner)},
         {"kRecSplit", "k-RecSplit", kMinimal, RUN_NK(kRecSplitContenderRunner)},

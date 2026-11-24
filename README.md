@@ -110,6 +110,18 @@ and CHD from cmph supports `k>=2, alpha<1`. Unsupported combinations are skipped
   of a bin stays below its length. E.g. k=8: 0.034 bits/key at alpha=0.5 and 0.067 at alpha=0.6; k=100: 0.0098 at
   alpha=0.8 (previously at least 2 bits per used bin, i.e. 0.33-0.43 bits/key for k=8). Configurations whose
   consensus search does not end (too few bits) fail with an error instead of hanging.
+- `--thresholdBasedSampled` (`k<=128`, any alpha): instead of a codebook per bin, the threshold of a bin is sampled
+  from a distribution `g` by hashing the consensus seed with the bin's own (fractional number of) bits, so also bins
+  without bits get new thresholds when an earlier bin changes. A bin with `Y` keys accepts a seed if it keeps between
+  `a(Y)` and `k` keys. `g` (on 64 grid thresholds) and `a(Y)` minimize the model cost `E_Y[-log2 M_Y]`,
+  `M_Y = sum_T g(T) P[Bin(Y,T) in [a(Y),k]]`, for a fill of `alpha k` (exponentiated gradient + bisection on the
+  Lagrange multiplier, at most 4 bits for any bin size), and the bits per bin are `slack` times that cost, raised if
+  the search does not finish. This is the generalization of the optimal threshold distribution of the paper: the
+  optimal `g` is the log-optimal (Blahut-Arimoto/Kelly) mixture over the acceptance intervals of the bin sizes; for
+  alpha=1 it tends to the distribution of the (k+1)-th fingerprint (Gamma), for small alpha to a single threshold
+  `mu/lambda`, and in between (for large k) to a geometric grid of thresholds with ratio `(k-e+1/2)/(k+1/2)` and the
+  Poisson mass of the covered bin sizes as weights (e = allowed empty slots). k=8: 0.032/0.106/0.189/0.316 bits/key
+  at alpha=0.5/0.7/0.8/0.9 (codebooks: 0.034/0.147/0.23/0.42), k=100: 0.0083/0.020 at alpha=0.8/0.9.
 - Repair (`repair=` in the name): `auto` uses `CapacityRepair` (`include/common/CapacityRepair.hpp`, hash-and-displace
   into the bins with free slots, Rice-coded seeds) if at least 1.25x as many free slots as leftover keys remain, and
   FiPS + Elias-Fano (the original method) otherwise, e.g. always for alpha=1.
