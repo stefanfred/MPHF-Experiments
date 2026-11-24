@@ -105,7 +105,8 @@ if(NOT TARGET gcem)
 endif()
 add_library(KphfCompetitors INTERFACE)
 target_include_directories(KphfCompetitors INTERFACE
-        include/common include/pachash include/recsplit include/hash-displace include/threshold-based-bumping)
+        include/common include/pachash include/recsplit include/hash-displace include/threshold-based-bumping
+        include/kptrhash)
 target_link_libraries(KphfCompetitors INTERFACE gcem Sux FiPS SimpleRibbon ConsensusRecSplit ByteHamsterUtil)
 target_compile_features(KphfCompetitors INTERFACE cxx_std_23)
 target_link_libraries(PerfectHashingCompetitors INTERFACE KphfCompetitors)

@@ -98,22 +98,31 @@ and CHD from cmph supports `k>=2, alpha<1`. Unsupported combinations are skipped
 - `--thresholdBasedConsensus` with `alpha<1` uses a budget of `ceil(N/k)/alpha` bins. Every layer gets
   `(keys of the layer)/(k*gamma)` bins (`gamma` is the `overload=` in the name, `gamma<1` is allowed for `alpha<1`).
   Layers are added until all keys are placed or the budget is used up, and only keys left over after that are
-  repaired into empty slots (FiPS + Elias-Fano, as in the minimal case). No repair structure is built otherwise.
-  Repair is avoided if a layer fills its bins to more than `alpha` on average, i.e. roughly
-  `E[min(Pois(gamma*k), k)] >= alpha*k`, as long as the threshold size is large enough to reach that fill.
-  Since every used bin costs `thresholdSize` bits, the space does not decrease further once `alpha` is below
-  the fill that the layers reach on their own.
+  repaired into empty slots. No repair structure is built otherwise.
+- Threshold lengths are fractional (`thresholdBits=`, as in the consensus paper): bin `b` of a layer uses the bits
+  `[floor(b*bits), floor((b+1)*bits))` of the layer's consensus stream, so bins get `floor(bits)` or `ceil(bits)`
+  threshold bits, with one codebook per length. Below 2 bits, codebooks have 1 or 2 thresholds (no "bump everything"
+  threshold, any number of empty slots), chosen such that the expected consensus cost of a bin stays below its length
+  (`threshold_codebook`). This is what makes `alpha<1` cheap: e.g. k=8 needs 0.11 bits/key at alpha=0.5 and 0.23 at
+  alpha=0.8 (previously at least 2 bits per used bin, i.e. 0.33-0.43 bits/key).
+- Repair (`repair=` in the name): `auto` uses `CapacityRepair` (`include/common/CapacityRepair.hpp`, hash-and-displace
+  into the bins with free slots, Rice-coded seeds) if at least 1.25x as many free slots as leftover keys remain, and
+  FiPS + Elias-Fano (the original method) otherwise, e.g. always for alpha=1.
+  `include/common/TruncatedPoisson.hpp` computes the lower bound of this "fill the free slots" problem,
+  `-log2 P[random function respects the free capacities] = n log2(lambda B/n) + n log2 e - sum_j log2 S_{e_j}(lambda)`
+  with `S_e(lambda) = sum_{i<=e} lambda^i/i!` and `lambda` such that `sum_j E[Pois(lambda) | <= e_j] = n`.
+  CapacityRepair needs 1-2.5 bits per repaired key where FiPS + Elias-Fano needs 5-10.
 - `--hashDisplace` with `alpha<1` hashes keys to `[0, alpha)` instead of `[0, 1)` of the optimal bucket assignment
   function and rescales the number of buckets accordingly, i.e., it only uses the `[0, alpha]` prefix of the
   bucket function for the minimal case, like suggested in the PHOBIC paper.
-
-```bash
-./Comparison --list -k 1,8 -l 0.9,1                   # what runs for which setting
-./Comparison --all -k 1,4,8,16 -l 0.8,0.9,0.95,1 -n 5M # everything that supports a setting
-./Comparison --kChd --hashDisplace -k 8 -l 0.9,1       # explicit selection (old flags still work)
-```
-Old invocations (`--pthash --minimalOnly --loadFactor 0.9`) behave as before. Variants that build a minimal function on
-top of a sparser table print `loadFactor=1`, so they end up in the `alpha=1` group.
+- `--kPtrHash` (`alpha<1`, `k<=255`) is a C++ port of k-PtrHash from static-hash-sets (`include/kptrhash`), with
+  bumped keys repaired into the free slots of the range (instead of a second k-PtrHash behind the range). The seed
+  score is a parameter (`score=`): `adhoc` is the original 2^load weight per slot, `natural` the loss of
+  log-count of the remaining placements, `sum over hit bins of ln S_{k-l}(lambda) - ln S_{k-l-c}(lambda)`,
+  with `lambda` from the histogram of free capacities and the number of remaining keys (updated every n/512 keys),
+  and `naturalStatic` the same with the initial `lambda`. Both only look at the loads of the bins a seed hits
+  (cumulative per-load table). The natural score bumps fewer keys close to the space limit
+  (e.g. k=8, alpha=0.9, 1.2x lower bound: 20.8k instead of 25.2k of 1M keys).
 
 ### Pareto fronts
 `scripts/pareto.sh build` sweeps a (k, alpha) grid and `scripts/pareto.py results.log [--csv] [--plot dir] [--y construction]`

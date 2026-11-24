@@ -35,6 +35,7 @@
 #include "kphf/ThresholdBasedBumpingConsensusContender.hpp"
 #include "kphf/ThresholdBasedBumpingOldContender.hpp"
 #include "kphf/KRecSplitContender.hpp"
+#include "kphf/KPtrHashContender.hpp"
 
 #ifdef HAS_VULKAN
 #include "bucketplacement/GpuPhobicContender.h"
@@ -58,6 +59,8 @@ static bool bdzSupports(size_t k, double alpha) { return k == 1 && alpha > 0 && 
 static bool kMinimal(size_t k, double alpha) { return isCompiledK(k) && isOne(alpha); }
 // k-perfect hash functions with compile-time k that support any load factor alpha <= 1
 static bool kAnyLoad(size_t k, double alpha) { return isCompiledK(k) && alpha > 0 && alpha <= 1.0 + 1e-9; }
+// k-PtrHash: compile-time k <= 255 (8-bit bin loads), non-minimal only
+static bool kPtrHashSupports(size_t k, double alpha) { return isCompiledK(k) && k <= 255 && alpha > 0 && alpha < 0.995; }
 // CHD from cmph can be configured for arbitrary k, but never terminates for alpha=1
 static bool kChdSupports(size_t k, double alpha) { return k >= 2 && alpha > 0 && alpha < 0.995; }
 
@@ -149,6 +152,8 @@ const std::vector<ContenderSpec> &allContenders() {
         {"thresholdBasedOld", "Threshold-based bumping (implementation from the literature)", kMinimal,
          RUN_NK(thresholdBasedBumpingOldContenderRunner)},
         {"kRecSplit", "k-RecSplit", kMinimal, RUN_NK(kRecSplitContenderRunner)},
+        {"kPtrHash", "k-PtrHash (C++ port), ad-hoc vs. natural (log-count) seed score", kPtrHashSupports,
+         [](const RunConfig &c) { kPtrHashContenderRunner(c.N, c.k, c.alpha); }},
     };
     return list;
 }

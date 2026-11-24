@@ -15,6 +15,7 @@
 #include <Fips.h>
 
 #include <hash128.hpp>
+#include <CapacityRepair.hpp>
 #include "consensus.hpp"
 #include "optimalThresholds.hpp"
 
@@ -85,24 +86,30 @@ struct AllowedImperfectBumpingEntry {
     uint64_t probability;
 };
 
-template <uint64_t k, int threshold_size>
+/**
+ * Allowed number of empty slots per bin size for one threshold codebook (runtime version).
+ * Codebooks with at most 2 thresholds (fractional threshold lengths below 2) allow any number of empty slots:
+ * the search tries the largest threshold first anyway, and the other one is the alternative for backtracking.
+ */
 struct AllowedImperfectBumping {
-    static constexpr uint64_t n_thresholds = 1ul << threshold_size;
+    const uint64_t k;
     const uint64_t max_n;
-    std::vector<double> thresholds;
+    const bool anyError;
     std::vector<ThresholdInfo> threshold_info;
     std::vector<double> lgamma_cache;
     std::vector<AllowedImperfectBumpingEntry> errors;
 
-    AllowedImperfectBumping(double lambda)
-        : max_n(static_cast<uint64_t>(2ul * k * lambda)) {
-        thresholds = ThresholdBasedBumping::compute_thresholds_normalized(k, lambda*k, n_thresholds);
+    AllowedImperfectBumping(uint64_t k, double lambda, const std::vector<double> &thresholds)
+        : k(k), max_n(static_cast<uint64_t>(2ul * k * lambda) + 2), anyError(thresholds.size() <= 2) {
         threshold_info = compute_threshold_info(thresholds);
         lgamma_cache = compute_lgamma_cache(max_n);
         errors.resize(max_n + 1, {~0ul, 0});
     }
 
     AllowedImperfectBumpingEntry getAllowed(size_t actualBucketSize) {
+        if (anyError) {
+            return {k + 1, 0};
+        }
         if (errors[actualBucketSize].allowedBumped == ~0ul) {
             double e = best_error(actualBucketSize, k, threshold_info, lgamma_cache);
             uint64_t q = static_cast<uint64_t>(e);
@@ -111,10 +118,92 @@ struct AllowedImperfectBumping {
         return errors[actualBucketSize];
     }
 
-    size_t maxBucketSize() {
+    size_t maxBucketSize() const {
         return max_n;
     }
 };
+
+/**
+ * Expected consensus cost E_Y[log2(m / E[#valid thresholds | Y])] in bits of a small codebook with m <= 2 entries,
+ * for Y ~ Pois(lambda) keys per bin, where a threshold is valid if it keeps at most k keys (small codebooks allow any
+ * number of empty slots, see best_error). With threshold T, the number of kept keys is Bin(Y, T).
+ */
+inline double small_codebook_cost(uint64_t k, double lambda, const std::vector<double> &codebook,
+                                  double *tailCost = nullptr) {
+    uint64_t maxY = uint64_t(lambda + 12 * std::sqrt(lambda) + 20);
+    double cost = 0, pY = std::exp(-lambda), mass = 0, cdf = 0;
+    if (tailCost) *tailCost = 0;
+    for (uint64_t y = 0; y <= maxY; y++) {
+        double valid = 0;
+        for (double t : codebook) {
+            if (y <= k || t >= 1.0) {
+                valid += y <= k ? 1.0 : 0.0;
+                continue;
+            }
+            // P[Bin(y, t) <= k]
+            double p = 0;
+            for (uint64_t i = 0; i <= k; i++) {
+                p += std::exp(std::lgamma(y + 1.0) - std::lgamma(i + 1.0) - std::lgamma(y - i + 1.0)
+                              + double(i) * std::log(t) + double(y - i) * std::log1p(-t));
+            }
+            valid += std::min(1.0, p);
+        }
+        double c = std::log2(double(codebook.size()) / std::max(valid, 1e-300));
+        cost += pY * c;
+        mass += pY;
+        cdf += pY;
+        if (tailCost && cdf <= 0.995) *tailCost = std::max(*tailCost, c);
+        pY *= lambda / double(y + 1);
+    }
+    return cost / mass;
+}
+
+/**
+ * Normalized threshold codebook with 2^length entries for bins with Pois(lambda) keys.
+ * For >= 4 thresholds, this is the empty-slot minimizing codebook from the paper (first threshold 0, last 1).
+ * Smaller codebooks (used by fractional threshold lengths below 2 bits) cannot afford the "bump everything"
+ * threshold 0 and allow any number of empty slots. 2 thresholds are {T, 1}, a single threshold is {T}. T is the
+ * largest value such that the expected consensus cost of the codebook (small_codebook_cost) is at most
+ * length - 0.4 bits (0.005 bits for length 0), and at most 3 bits for all but the 0.5% largest bins, so
+ * the consensus search has enough slack and no single bin needs a lot of backtracking.
+ * A single threshold has to be < 1, because bin sizes are fixed per layer and only fingerprints change with the
+ * consensus seed, so a bin with more than k keys could never be fixed otherwise.
+ */
+inline std::vector<double> threshold_codebook(uint64_t k, double lambda, uint64_t length) {
+    using ThresholdBasedBumping::compute_thresholds_normalized;
+    if (length >= 2) {
+        return compute_thresholds_normalized(k, lambda, 1ul << length);
+    }
+    double budget = double(length) - 0.4;
+    auto make = [&](double t) { return length == 1 ? std::vector<double>{t, 1.0} : std::vector<double>{t}; };
+    double lo = 0.0, hi = 1.0;
+    for (int it = 0; it < 40; it++) {
+        double mid = 0.5 * (lo + hi);
+        double tail;
+        double cost = small_codebook_cost(k, lambda, make(mid), &tail);
+        if (cost <= std::max(budget, 0.005) && tail <= 3.0) lo = mid;
+        else hi = mid;
+    }
+    return make(std::max(lo, 1e-6));
+}
+
+enum class RepairMode {
+    /** Capacity-aware hash-and-displace if enough free slots remain, otherwise FiPS + Elias-Fano */
+    Auto,
+    /** Minimal perfect hash function (FiPS) on the leftover keys + Elias-Fano of the empty slots (from the paper) */
+    FipsEliasFano,
+    /** Hash-and-displace into the bins with free slots (CapacityRepair) */
+    Displace
+};
+
+inline std::string repairModeName(RepairMode m) {
+    switch (m) {
+        case RepairMode::Auto: return "auto";
+        case RepairMode::FipsEliasFano: return "fipsEF";
+        case RepairMode::Displace: return "displace";
+    }
+    return "?";
+}
 
 #ifdef STATS
 uint64_t perfect_thresholds = 0, total_thresholds = 0, extra_bumped = 0;
@@ -153,19 +242,32 @@ inline void sort_fingerprints(std::ranges::subrange<std::vector<Key>::iterator> 
       [](const Key &key) -> uint64_t { return key.fingerprint; });
 }
 
-template <uint64_t k, int threshold_size>
+template <uint64_t k>
 class ThresholdBasedBumpingConsensus {
 private:
-    static_assert(threshold_size > 1);
     static_assert(k > 0);
-    static constexpr uint64_t n_thresholds = 1ul << threshold_size;
-    uint64_t n;
-    std::array<uint64_t, n_thresholds> avail_thresholds;
+    static constexpr uint64_t MAX_THRESHOLD_SIZE = 24;
+    uint64_t n = 0;
+    /** Fractional number of threshold bits per bin as 32.32 fixed point. Bin b of a layer uses the bits
+     * [off(b), off(b+1)) of the layer's consensus stream with off(b) = floor(b * bitsFixed / 2^32),
+     * so bins have either floor(bits) or ceil(bits) threshold bits. */
+    uint64_t bitsFixed = 0;
+    uint64_t minLength = 0;
+    using Codebooks = std::array<std::vector<uint64_t>, 2>;
+    /** codebookSets[s][l] is the codebook for length minLength + l (l = 0, 1). Set 0 is for bins with
+     * Pois(gamma k) keys. Small codebooks (no "bump everything" threshold) need a second set for the last layer if
+     * that one is overloaded more than gamma (because it has to take the rest of the budget). */
+    std::vector<Codebooks> codebookSets;
     std::vector<std::pair<uint64_t, Consensus>> layers;
+    std::vector<uint8_t> layerCodebookSet;
     /** True if keys were left over after the bin budget was used up and had to be repaired into empty slots. */
     bool repaired = false;
+    RepairMode repairUsed = RepairMode::Auto;
+    size_t numRepaired = 0;
+    double repairLowerBound = 0;
     fips::FiPS<> phf;
     mutable sux::bits::EliasFano<> gaps;
+    CapacityRepair<> displace;
 public:
     /**
      * Number of bins of the output range: ceil(n/k) for alpha=1, otherwise ceil(n/k)/alpha (rounded down,
@@ -208,11 +310,13 @@ public:
         for (uint64_t i = 0; i < layers.size(); i++) {
             auto &[cur_buckets, consensus] = layers[i];
             uint64_t b = calculateBucket(hash, i, cur_buckets);
-            auto [seed, tidx] = consensus.get(b * threshold_size, threshold_size);
-            tidx = decrypt(seed, tidx);
+            uint64_t off = bitOffset(b);
+            uint64_t len = bitOffset(b + 1) - off;
+            auto [seed, tidx] = consensus.get(off, len);
+            tidx = decrypt(seed, tidx, len);
             uint64_t f = bytehamster::util::remix(hash.lo + seed + i);
 
-            if (f < avail_thresholds[tidx]) {
+            if (f < codebookSets[layerCodebookSet[i]][len - minLength][tidx]) {
                 return offset + b;
             }
 
@@ -222,16 +326,35 @@ public:
         if (!repaired) {
             return 0; // Only reachable for keys that were not in the input set
         }
+        if (repairUsed == RepairMode::Displace) {
+            return displace(hash.hi ^ hash.lo);
+        }
         return gaps.select(phf(hash.hi ^ hash.lo));
     }
 
-    /** Number of keys that were placed by the repair step (FiPS into the empty slots). */
+    /** Number of keys that were placed by the repair step. */
     [[nodiscard]] size_t numRepairedKeys() const {
-        return repaired ? phf.getN() : 0;
+        return numRepaired;
     }
 
     [[nodiscard]] size_t numLayers() const {
         return layers.size();
+    }
+
+    /** Which repair method was used, Auto if none */
+    [[nodiscard]] RepairMode repairMethod() const {
+        return repaired ? repairUsed : RepairMode::Auto;
+    }
+
+    /** Space lower bound in bits for the repair step (placing the leftover keys into the free slots) */
+    [[nodiscard]] double repairLowerBoundBits() const {
+        return repairLowerBound;
+    }
+
+    [[nodiscard]] size_t repairBits() const {
+        if (!repaired) return 0;
+        if (repairUsed == RepairMode::Displace) return displace.count_bits() - sizeof(displace) * 8;
+        return phf.getBits() - sizeof(phf) * 8 + gaps.bitCount() - sizeof(gaps) * 8;
     }
 
     size_t count_bits() const {
@@ -239,25 +362,35 @@ public:
         for (auto &[nb,c] : layers) {
             s += c.count_bits() - sizeof(c) * 8;
         }
+        // Codebooks only depend on k, gamma, the threshold bits and (for the last layer) its load, so they are
+        // not counted, like the lookup table of the original implementation.
         return sizeof(*this) * 8
-            - sizeof(avail_thresholds) * 8 // Lookup table independent of keys, could actually be static constexpr
-            + layers.capacity() * sizeof(layers[0])
+            + layers.capacity() * sizeof(layers[0]) * 8
+            + layerCodebookSet.capacity() * 8
+            + 64 // load of the last layer, from which its codebooks could be recomputed
             + s
-            + (repaired ? phf.getBits() - sizeof(phf) * 8 : 0)
-            + (repaired ? gaps.bitCount() - sizeof(gaps) * 8 : 0);
+            + repairBits();
     }
 
 private:
+    uint64_t bitOffset(uint64_t bin) const {
+        return uint64_t((__uint128_t(bin) * bitsFixed) >> 32);
+    }
+
     static inline size_t calculateBucket(Hash128 key, size_t layer, size_t cur_buckets) {
         return bytehamster::util::fastrange64(bytehamster::util::remix(key.hi + layer), cur_buckets);
     }
 
-    static inline uint64_t encrypt(uint64_t key, uint64_t tidx) {
-        return (tidx ^ bytehamster::util::remix(key)) & ((1ul << threshold_size) - 1);
+    static inline uint64_t mask(uint64_t len) {
+        return len == 0 ? 0 : (~0ul >> (64 - len));
     }
 
-    static inline uint64_t decrypt(uint64_t key, uint64_t tidx) {
-        return (tidx ^ bytehamster::util::remix(key)) & ((1ul << threshold_size) - 1);
+    static inline uint64_t encrypt(uint64_t key, uint64_t tidx, uint64_t len) {
+        return (tidx ^ bytehamster::util::remix(key)) & mask(len);
+    }
+
+    static inline uint64_t decrypt(uint64_t key, uint64_t tidx, uint64_t len) {
+        return (tidx ^ bytehamster::util::remix(key)) & mask(len);
     }
 
     struct LayerBuilder {
@@ -267,16 +400,22 @@ private:
         std::vector<uint64_t> &emptySlots;
         std::vector<Hash128> bumped;
 
-        const std::array<uint64_t, n_thresholds> &thresholds;
-        AllowedImperfectBumping<k, threshold_size> &allowedImperfectBumping;
+        const ThresholdBasedBumpingConsensus &parent;
+        const Codebooks &codebooks;
+        std::array<AllowedImperfectBumping, 2> &allowedImperfectBumping;
 
-        LayerBuilder(const std::array<uint64_t, n_thresholds> &thresholds,
-                    AllowedImperfectBumping<k, threshold_size> &allowedImperfectBumping,
+        LayerBuilder(const ThresholdBasedBumpingConsensus &parent, const Codebooks &codebooks,
+                    std::array<AllowedImperfectBumping, 2> &allowedImperfectBumping,
                     std::vector<Key> &keys, uint64_t layer, uint64_t buckets,
                     uint64_t offset, std::vector<uint64_t> &emptySlots)
                 : keys(keys), current(keys.begin(), keys.begin()),
                   cur_bucket(0), total_buckets(buckets), layer(layer), offset(offset),
-                  emptySlots(emptySlots), thresholds(thresholds), allowedImperfectBumping(allowedImperfectBumping) {
+                  emptySlots(emptySlots), parent(parent), codebooks(codebooks),
+                  allowedImperfectBumping(allowedImperfectBumping) {
+        }
+
+        uint64_t length(uint64_t bin) const {
+            return parent.bitOffset(bin + 1) - parent.bitOffset(bin);
         }
 
         std::optional<uint64_t> advance(uint64_t seed) {
@@ -295,7 +434,7 @@ private:
 
             cur_bucket++;
 
-            return threshold_size;
+            return length(cur_bucket - 1);
         }
 
         uint64_t backtrack() {
@@ -319,10 +458,11 @@ private:
             }
             bumped.resize(bumped.size() - (current.size() + cnt - k));
 
-            return threshold_size;
+            return length(cur_bucket - 1);
         }
 
         std::optional<uint64_t> find_first(uint64_t seed) {
+            const auto &thresholds = codebooks[length(cur_bucket - 1) - parent.minLength];
             if (current.size() > k) {
                 uint64_t fp = current[k].fingerprint;
                 auto it = std::ranges::upper_bound(thresholds, fp);
@@ -333,14 +473,17 @@ private:
         }
 
         std::optional<uint64_t> find_next(uint64_t seed, uint64_t prev) {
-            return find(seed, decrypt(seed, prev));
+            return find(seed, decrypt(seed, prev, length(cur_bucket - 1)));
         }
 
         std::optional<uint64_t> find(uint64_t seed, uint64_t prev) {
+            uint64_t len = length(cur_bucket - 1);
+            const auto &thresholds = codebooks[len - parent.minLength];
+            auto &allowedTable = allowedImperfectBumping[len - parent.minLength];
             uint64_t goal = std::min(k, current.size());
             AllowedImperfectBumpingEntry allowed = {};
-            if (current.size() < allowedImperfectBumping.maxBucketSize()) {
-                allowed = allowedImperfectBumping.getAllowed(current.size());
+            if (current.size() < allowedTable.maxBucketSize()) {
+                allowed = allowedTable.getAllowed(current.size());
             } else {
                 allowed = {k + 1, 0};
             }
@@ -349,7 +492,10 @@ private:
                 auto it = std::ranges::lower_bound(current, thresholds[tidx], {},
                     [](const Key &key) { return key.fingerprint; });
                 uint64_t idx = it - current.begin();
-                uint64_t error = goal - idx;
+                if (idx > k) {
+                    continue; // Possible for codebooks without threshold 0: this threshold keeps too many keys
+                }
+                uint64_t error = goal > idx ? goal - idx : 0;
                 if (error > allowed.allowedBumped) {
                     break;
                 }
@@ -360,7 +506,7 @@ private:
                     for (uint64_t x = idx; x < k; x++) {
                         emptySlots.push_back(offset + cur_bucket - 1);
                     }
-                    return encrypt(seed, tidx);
+                    return encrypt(seed, tidx, len);
                 }
             }
             return {};
@@ -368,20 +514,22 @@ private:
     };
 
     public:
-    ThresholdBasedBumpingConsensus() : n(0), gaps({}, 0) {
+    ThresholdBasedBumpingConsensus() : gaps({}, 0) {
     }
 
     /**
      * @param overload gamma: every layer gets (number of keys)/(k*gamma) bins.
+     * @param thresholdBits average number of threshold bits per bin, may be fractional (bins get floor or ceil of
+     *        it, as in the consensus paper). Below 2 bits, smaller codebooks are used (see threshold_codebook).
      * @param loadFactor alpha: the output range has n/(k*alpha) bins. Layers are added until all keys are placed
-     *        or the bins are used up. Only keys that are left over after that are repaired into empty slots
-     *        (FiPS + Elias-Fano). For alpha=1 this is the minimal k-perfect hash function from the paper,
-     *        for alpha<1 the repair step is not needed if gamma is large enough that a layer fills its bins to
-     *        more than alpha on average.
+     *        or the bins are used up. Only keys that are left over after that are repaired into empty slots.
+     * @param repairMode how leftover keys are placed into empty slots.
      */
     explicit ThresholdBasedBumpingConsensus(const std::vector<std::string> &keys, double overload,
-                                            double loadFactor = 1.0)
-            : ThresholdBasedBumpingConsensus(hashKeys(keys, overload, loadFactor), overload, loadFactor) {
+                                            double thresholdBits, double loadFactor = 1.0,
+                                            RepairMode repairMode = RepairMode::Auto)
+            : ThresholdBasedBumpingConsensus(hashKeys(keys, overload, loadFactor), overload, thresholdBits,
+                                             loadFactor, repairMode) {
     }
 
     static std::vector<Key> hashKeys(const std::vector<std::string> &keys, double overload, double loadFactor = 1.0) {
@@ -395,11 +543,34 @@ private:
         return hashed_keys;
     }
 
-    explicit ThresholdBasedBumpingConsensus(std::vector<Key> keys, double overload, double loadFactor = 1.0)
-            : n(keys.size()), avail_thresholds(ThresholdBasedBumping::compute_thresholds<n_thresholds>(k, k * overload)),
-              gaps({}, 0) {
+    explicit ThresholdBasedBumpingConsensus(std::vector<Key> keys, double overload, double thresholdBits,
+                                            double loadFactor = 1.0, RepairMode repairMode = RepairMode::Auto)
+            : n(keys.size()), gaps({}, 0) {
         assert(loadFactor > 0 && loadFactor <= 1.0);
-        AllowedImperfectBumping<k, threshold_size> allowedImperfectBumping(overload);
+        if (thresholdBits < 0 || thresholdBits > double(MAX_THRESHOLD_SIZE - 1)) {
+            throw std::invalid_argument("thresholdBits out of range");
+        }
+        bitsFixed = static_cast<uint64_t>(std::llround(std::ldexp(thresholdBits, 32)));
+        minLength = bitsFixed >> 32;
+        struct CodebookSet {
+            Codebooks codebooks;
+            std::array<AllowedImperfectBumping, 2> allowed;
+        };
+        auto makeSet = [&](double lambda) {
+            std::array<std::vector<double>, 2> normalized;
+            Codebooks cbs;
+            for (uint64_t l = 0; l < 2; l++) {
+                normalized[l] = threshold_codebook(k, lambda, minLength + l);
+                for (double t : normalized[l]) {
+                    cbs[l].push_back(ThresholdBasedBumping::double_to_u64(t));
+                }
+            }
+            return CodebookSet{cbs, {AllowedImperfectBumping(k, lambda / k, normalized[0]),
+                                     AllowedImperfectBumping(k, lambda / k, normalized[1])}};
+        };
+        std::vector<CodebookSet> sets;
+        sets.push_back(makeSet(k * overload));
+        codebookSets.push_back(sets[0].codebooks);
 
         uint64_t total_buckets = totalBuckets(n, loadFactor);
 
@@ -428,14 +599,25 @@ private:
 
             sort_buckets(keys);
 
-            LayerBuilder builder(avail_thresholds, allowedImperfectBumping, keys, layer, cur_buckets, offset, emptySlots);
+            uint8_t set = 0;
+            double layerLambda = double(cur_keys) / double(cur_buckets);
+            if (minLength < 2 && layerLambda > 1.01 * k * overload) {
+                // Overloaded last layer, small codebooks need thresholds for its actual load
+                sets.push_back(makeSet(layerLambda));
+                codebookSets.push_back(sets.back().codebooks);
+                set = sets.size() - 1;
+            }
+            LayerBuilder builder(*this, sets[set].codebooks, sets[set].allowed, keys, layer, cur_buckets, offset,
+                                 emptySlots);
             Consensus consensus(builder);
             layers.emplace_back(cur_buckets, std::move(consensus));
+            layerCodebookSet.push_back(set);
             std::swap(bumped, builder.bumped);
 
             offset += cur_buckets;
         }
         layers.shrink_to_fit();
+        layerCodebookSet.shrink_to_fit();
 
 #ifdef STATS
         bumped_keys += bumped.size();
@@ -445,10 +627,28 @@ private:
             return; // No repair needed
         }
         repaired = true;
+        numRepaired = bumped.size();
+
         std::vector<uint64_t> fallbackKeys;
+        fallbackKeys.reserve(bumped.size());
         for (Hash128 key : bumped) {
             fallbackKeys.push_back(key.hi ^ key.lo);
         }
+        std::vector<uint32_t> loads(total_buckets, 0);
+        for (uint64_t b = 0; b < offset; b++) loads[b] = k;
+        for (uint64_t b : emptySlots) loads[b]--;
+        repairLowerBound = CapacityRepair<>::lowerBoundBits(loads, k, fallbackKeys.size());
+
+        repairUsed = repairMode;
+        if (repairUsed == RepairMode::Auto) {
+            repairUsed = CapacityRepair<>::isSuitable(fallbackKeys.size(), emptySlots.size())
+                    ? RepairMode::Displace : RepairMode::FipsEliasFano;
+        }
+        if (repairUsed == RepairMode::Displace) {
+            displace = CapacityRepair<>(fallbackKeys, std::move(loads), k);
+            return;
+        }
+
         phf = fips::FiPS<>(fallbackKeys);
         std::vector<uint64_t> actual_spots;
         for (uint64_t key : fallbackKeys) {
@@ -471,4 +671,3 @@ private:
 };
 
 }
-

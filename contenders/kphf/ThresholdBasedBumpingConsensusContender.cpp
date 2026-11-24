@@ -14,7 +14,7 @@ inline std::vector<double> consensusOverloads(double loadFactor) {
         return {1.05, 1.10, 1.20, 1.30, 1.40, 1.50, 1.60, 1.80, 2.00, 2.20};
     }
     std::vector<double> result;
-    for (double gamma : {0.80, 0.90, 1.00, 1.05, 1.10, 1.20, 1.30, 1.40, 1.50, 1.60, 1.80, 2.00, 2.20, 2.50, 3.00}) {
+    for (double gamma : {0.80, 0.90, 1.00, 1.10, 1.20, 1.40, 1.60, 2.00, 2.50}) {
         if (gamma >= loadFactor - 1e-9) {
             result.push_back(gamma);
         }
@@ -22,25 +22,32 @@ inline std::vector<double> consensusOverloads(double loadFactor) {
     return result;
 }
 
-template <size_t k, size_t threshold_size>
-void dispatchOverloadsConsensus(size_t N, double loadFactor) {
-    for (double overload : consensusOverloads(loadFactor)) {
-        ThresholdBasedBumpingConsensusContender<k, threshold_size>(N, overload, loadFactor).run();
+/**
+ * Average threshold bits per bin (fractional, as in the consensus paper). For alpha < 1, a bin needs fewer bits
+ * because more empty slots are allowed, so we also go below 2 bits (bins with 0 or 1 bit use small codebooks).
+ */
+inline std::vector<double> consensusThresholdBits(size_t k, double loadFactor) {
+    size_t firstSize = tlx::integer_log2_ceil(k) >= 6 ? tlx::integer_log2_ceil(k) - 4 : 2;
+    std::vector<double> result;
+    if (loadFactor < 1.0 - 1e-9) {
+        for (double b : {0.25, 0.5, 1.0, 1.5}) {
+            if (b < double(firstSize)) result.push_back(b);
+        }
     }
+    for (double b = firstSize; b <= firstSize + 7 + 1e-9; b += 0.5) {
+        result.push_back(b);
+    }
+    return result;
 }
 
 template <size_t k>
 struct ThresholdBasedBumpingConsensusContenderRunner {
     void operator() (size_t N, double loadFactor) const {
-        constexpr size_t firstSize = tlx::integer_log2_ceil(k) >= 6 ? tlx::integer_log2_ceil(k) - 4 : 2;
-        dispatchOverloadsConsensus<k, firstSize>(N, loadFactor);
-        dispatchOverloadsConsensus<k, firstSize + 1>(N, loadFactor);
-        dispatchOverloadsConsensus<k, firstSize + 2>(N, loadFactor);
-        dispatchOverloadsConsensus<k, firstSize + 3>(N, loadFactor);
-        dispatchOverloadsConsensus<k, firstSize + 4>(N, loadFactor);
-        dispatchOverloadsConsensus<k, firstSize + 5>(N, loadFactor);
-        dispatchOverloadsConsensus<k, firstSize + 6>(N, loadFactor);
-        dispatchOverloadsConsensus<k, firstSize + 7>(N, loadFactor);
+        for (double bits : consensusThresholdBits(k, loadFactor)) {
+            for (double overload : consensusOverloads(loadFactor)) {
+                ThresholdBasedBumpingConsensusContender<k>(N, overload, bits, loadFactor).run();
+            }
+        }
     }
 };
 
