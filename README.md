@@ -122,6 +122,11 @@ and CHD from cmph supports `k>=2, alpha<1`. Unsupported combinations are skipped
   `mu/lambda`, and in between (for large k) to a geometric grid of thresholds with ratio `(k-e+1/2)/(k+1/2)` and the
   Poisson mass of the covered bin sizes as weights (e = allowed empty slots). k=8: 0.032/0.106/0.189/0.316 bits/key
   at alpha=0.5/0.7/0.8/0.9 (codebooks: 0.034/0.147/0.23/0.42), k=100: 0.0083/0.020 at alpha=0.8/0.9.
+- `--thresholdBasedFixed`: the same with one fixed threshold per layer (optimized together with the windows a(Y)),
+  where the bin's bits change the fingerprints instead of the threshold. In the model this costs the same as the
+  optimized distribution, in practice it is as good for k=8 and small alpha, but for large k and alpha close to 1 the
+  cost of rare large bins is much higher (k=100, alpha=0.95: 8.8 instead of 5.5 bits at the 99th percentile bin size),
+  which makes the consensus search need more bits.
 - Repair (`repair=` in the name): `auto` uses `CapacityRepair` (`include/common/CapacityRepair.hpp`, hash-and-displace
   into the bins with free slots, Rice-coded seeds) if at least 1.25x as many free slots as leftover keys remain, and
   FiPS + Elias-Fano (the original method) otherwise, e.g. always for alpha=1.

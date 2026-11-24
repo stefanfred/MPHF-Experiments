@@ -169,7 +169,94 @@ struct ThresholdDistribution {
     }
 };
 
-template <uint64_t k>
+/**
+ * Single fixed threshold T per layer (the seed only changes the fingerprints): for every T on a grid, choose the
+ * windows a(Y) for a fill of targetFill (bisection on the multiplier, at most MAX_BIN_COST bits per bin size if
+ * possible) and take the T with the smallest cost. In the model, this is as good as an optimized distribution of
+ * thresholds (the per-size windows adapt to the bin size instead), and the 2^L values of a bin are independent
+ * trials because they change the fingerprints.
+ */
+inline ThresholdDistribution optimizeFixedThreshold(uint64_t k, double lambda, double targetFill,
+                                                    double maxCost = std::numeric_limits<double>::infinity()) {
+    const size_t K1 = k + 1;
+    const size_t maxY = size_t(lambda + 12 * std::sqrt(lambda) + 20);
+    std::vector<double> pY(maxY + 1);
+    {
+        double p = std::exp(-lambda), sum = 0;
+        for (size_t y = 0; y <= maxY; y++) { pY[y] = p; sum += p; p *= lambda / double(y + 1); }
+        for (double &x : pY) x /= sum;
+    }
+    std::vector<double> mass((maxY + 1) * (K1 + 1)), wsum((maxY + 1) * (K1 + 1)), pmf(K1);
+    struct Result { double cost, fill; std::vector<uint32_t> a; };
+    auto solveT = [&](double T, double nu) {
+        Result r{0, 0, std::vector<uint32_t>(maxY + 1, 0)};
+        for (size_t y = 0; y <= maxY; y++) {
+            double bestObj = std::numeric_limits<double>::infinity(), bestM = 0, bestW = 0;
+            bool bestCapped = false;
+            for (size_t a = 0; a <= std::min<size_t>(y, k); a++) {
+                double M = mass[y * (K1 + 1) + a], W = wsum[y * (K1 + 1) + a];
+                if (M <= 1e-300) continue;
+                bool capped = -std::log2(M) <= ThresholdDistribution::MAX_BIN_COST;
+                double obj = -std::log2(M) - nu * W / M;
+                if ((capped && !bestCapped) || (capped == bestCapped && obj < bestObj)) {
+                    bestObj = obj; bestM = M; bestW = W; bestCapped = capped; r.a[y] = a;
+                }
+            }
+            if (bestM <= 0) continue;
+            r.cost += pY[y] * -std::log2(bestM);
+            r.fill += pY[y] * bestW / bestM;
+        }
+        return r;
+    };
+    double bestCost = std::numeric_limits<double>::infinity(), bestFill = -1, bestT = 1;
+    Result best{};
+    for (int step = 1; step <= 200; step++) {
+        double T = step / 200.0;
+        for (size_t y = 0; y <= maxY; y++) {
+            std::fill(pmf.begin(), pmf.end(), 0.0);
+            if (T >= 1.0) {
+                if (y <= k) pmf[y] = 1.0;
+            } else {
+                for (size_t c = 0; c <= std::min<size_t>(y, k); c++) {
+                    pmf[c] = std::exp(std::lgamma(y + 1.0) - std::lgamma(c + 1.0) - std::lgamma(double(y - c) + 1.0)
+                                      + double(c) * std::log(T) + double(y - c) * std::log1p(-T));
+                }
+            }
+            mass[y * (K1 + 1) + K1] = 0; wsum[y * (K1 + 1) + K1] = 0;
+            for (size_t a = K1; a-- > 0;) {
+                mass[y * (K1 + 1) + a] = mass[y * (K1 + 1) + a + 1] + pmf[a];
+                wsum[y * (K1 + 1) + a] = wsum[y * (K1 + 1) + a + 1] + double(a) * pmf[a];
+            }
+        }
+        double lo = std::log(1e-4), hi = std::log(200.0);
+        Result r = solveT(T, std::exp(hi));
+        if (r.fill >= targetFill && r.cost <= maxCost) {
+            for (int it = 0; it < 30; it++) {
+                double mid = 0.5 * (lo + hi);
+                Result r2 = solveT(T, std::exp(mid));
+                if (r2.fill >= targetFill) { hi = mid; r = std::move(r2); } else lo = mid;
+            }
+            if (bestFill < targetFill || r.cost < bestCost) { bestCost = r.cost; bestFill = r.fill; bestT = T; best = r; }
+        } else if (bestFill < targetFill) {
+            // Target not reachable (yet): keep the largest fill within maxCost
+            for (int it = 0; it < 30 && r.cost > maxCost; it++) {
+                double mid = 0.5 * (lo + hi);
+                r = solveT(T, std::exp(mid));
+                hi = mid;
+            }
+            if (r.cost <= maxCost && r.fill > bestFill) { bestCost = r.cost; bestFill = r.fill; bestT = T; best = r; }
+        }
+    }
+    ThresholdDistribution d;
+    d.lambda = lambda;
+    d.costBits = bestCost;
+    d.fill = bestFill;
+    d.minKept = best.a;
+    d.table.assign(1, bestT >= 1.0 ? ~0ul : uint64_t(std::ldexp(bestT, 64)));
+    return d;
+}
+
+template <uint64_t k, bool FixedThreshold = false>
 class ThresholdBasedBumpingSampled {
     static_assert(k > 0 && k <= 128, "the distribution optimizer is O(k) per bin size and threshold");
     uint64_t n = 0;
@@ -189,6 +276,25 @@ class ThresholdBasedBumpingSampled {
     static constexpr uint64_t T_MIX = 0x9E3779B97F4A7C15ul;
     static constexpr uint64_t LAYER_MIX = 0xD1B54A32D192ED03ul;
     static constexpr uint64_t BIN_MIX = 0x8CB92BA72F3D8DD7ul;
+    static constexpr uint64_t FP_MIX = 0xA0761D6478BD642Ful;
+
+    /** Fingerprint of a key. With a fixed threshold, the bin's own value changes the fingerprints. */
+    static uint64_t fingerprint(uint64_t keyLo, uint64_t seed, uint64_t value, uint64_t layer) {
+        if constexpr (FixedThreshold) {
+            return bytehamster::util::remix(keyLo + seed + layer + (value + 1) * FP_MIX);
+        } else {
+            (void) value;
+            return bytehamster::util::remix(keyLo + seed + layer);
+        }
+    }
+
+    static ThresholdDistribution makeDistribution(uint64_t k_, double lambda, double targetFill, double maxCost) {
+        if constexpr (FixedThreshold) {
+            return optimizeFixedThreshold(k_, lambda, targetFill, maxCost);
+        } else {
+            return ThresholdDistribution::optimize(k_, lambda, targetFill, maxCost);
+        }
+    }
 
     uint64_t bitOffset(uint64_t bin) const {
         return uint64_t((__uint128_t(bin) * bitsFixed) >> 32);
@@ -230,11 +336,13 @@ class ThresholdBasedBumpingSampled {
             }
             auto it = current.end();
             while (it != keys.end() && it->bucket == cur_bucket) {
-                it->fingerprint = bytehamster::util::remix(it->hash.lo + seed + layer);
+                it->fingerprint = fingerprint(it->hash.lo, seed, 0, layer);
                 ++it;
             }
             current = std::ranges::subrange(current.end(), it);
-            sort_fingerprints(current);
+            if constexpr (!FixedThreshold) {
+                sort_fingerprints(current);
+            }
             cur_bucket++;
             return length(cur_bucket - 1);
         }
@@ -274,16 +382,35 @@ class ThresholdBasedBumpingSampled {
             uint64_t len = length(cur_bucket - 1);
             uint64_t values = 1ul << len;
             uint32_t minKept = std::min<uint32_t>(dist.minKeptFor(current.size()), current.size());
-            for (uint64_t v = start; v < values; v++) {
-                uint64_t t = dist.table[thresholdHash(seed, v, cur_bucket - 1, layer) >> (64 - ThresholdDistribution::TABLE_BITS)];
-                auto it = std::ranges::lower_bound(current, t, {}, [](const Key &key) { return key.fingerprint; });
-                uint64_t kept = it - current.begin();
-                if (kept > k || kept < minKept) continue;
-                for (Key &key : current | std::views::drop(kept)) bumped.push_back(key.hash);
-                for (uint64_t x = kept; x < k; x++) emptySlots.push_back(offset + cur_bucket - 1);
-                return v;
+            if constexpr (FixedThreshold) {
+                const uint64_t t = dist.table[0];
+                for (uint64_t v = start; v < values; v++) {
+                    uint64_t kept = 0;
+                    for (Key &key : current) {
+                        key.fingerprint = fingerprint(key.hash.lo, seed, v, layer);
+                        kept += key.fingerprint < t;
+                    }
+                    if (kept > k || kept < minKept) continue;
+                    for (Key &key : current) {
+                        if (key.fingerprint >= t) bumped.push_back(key.hash);
+                    }
+                    for (uint64_t x = kept; x < k; x++) emptySlots.push_back(offset + cur_bucket - 1);
+                    return v;
+                }
+                return {};
+            } else {
+                for (uint64_t v = start; v < values; v++) {
+                    uint64_t t = dist.table[thresholdHash(seed, v, cur_bucket - 1, layer)
+                                            >> (64 - ThresholdDistribution::TABLE_BITS)];
+                    auto it = std::ranges::lower_bound(current, t, {}, [](const Key &key) { return key.fingerprint; });
+                    uint64_t kept = it - current.begin();
+                    if (kept > k || kept < minKept) continue;
+                    for (Key &key : current | std::views::drop(kept)) bumped.push_back(key.hash);
+                    for (uint64_t x = kept; x < k; x++) emptySlots.push_back(offset + cur_bucket - 1);
+                    return v;
+                }
+                return {};
             }
-            return {};
         }
     };
 
@@ -312,7 +439,8 @@ public:
                                  double slack = 1.3)
             : n(strings.size()), gaps({}, 0) {
         double targetFill = std::min(0.999 * k, 1.01 * loadFactor * k);
-        ThresholdDistribution first = ThresholdDistribution::optimize(k, k * overload, targetFill);
+        ThresholdDistribution first = makeDistribution(k, k * overload, targetFill,
+                                                       std::numeric_limits<double>::infinity());
         // The consensus search needs some slack over the model cost. If it does not finish within a backtracking
         // budget, retry with more bits.
         for (int attempt = 0;; attempt++) {
@@ -371,8 +499,7 @@ private:
             double layerLambda = double(cur_keys) / double(cur_buckets);
             if (layerLambda > 1.01 * k * overload && dists.size() < 255) {
                 // Overloaded last layer (takes the rest of the budget): distribution for its actual load
-                dists.push_back(ThresholdDistribution::optimize(k, layerLambda, targetFill,
-                                                                (effectiveThresholdBits - 0.02) / slack));
+                dists.push_back(makeDistribution(k, layerLambda, targetFill, (effectiveThresholdBits - 0.02) / slack));
                 tables.push_back(dists.back().table);
                 d = dists.size() - 1;
             }
@@ -433,8 +560,13 @@ public:
             uint64_t off = bitOffset(b);
             uint64_t len = bitOffset(b + 1) - off;
             auto [seed, value] = consensus.get(off, len);
-            uint64_t t = tables[layerTable[i]][thresholdHash(seed, value, b, i) >> (64 - ThresholdDistribution::TABLE_BITS)];
-            if (bytehamster::util::remix(hash.lo + seed + i) < t) {
+            uint64_t t;
+            if constexpr (FixedThreshold) {
+                t = tables[layerTable[i]][0];
+            } else {
+                t = tables[layerTable[i]][thresholdHash(seed, value, b, i) >> (64 - ThresholdDistribution::TABLE_BITS)];
+            }
+            if (fingerprint(hash.lo, seed, value, i) < t) {
                 return offset + b;
             }
             offset += cur_buckets;

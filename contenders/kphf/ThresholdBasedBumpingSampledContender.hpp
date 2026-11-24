@@ -3,10 +3,11 @@
 #include <ThresholdBasedBumpingSampled.hpp>
 #include "Contender.h"
 
-template <uint64_t k>
+/** FixedThreshold: one threshold per layer, the bin's bits only change the fingerprints */
+template <uint64_t k, bool FixedThreshold = false>
 class ThresholdBasedBumpingSampledContender : public Contender {
     public:
-        using kphf_t = kphf::ThresholdBasedBumpingSampled::ThresholdBasedBumpingSampled<k>;
+        using kphf_t = kphf::ThresholdBasedBumpingSampled::ThresholdBasedBumpingSampled<k, FixedThreshold>;
         kphf_t kphf;
         double overload;
         double slack;
@@ -21,7 +22,7 @@ class ThresholdBasedBumpingSampledContender : public Contender {
         }
 
         std::string name() override {
-            return std::string("ThresholdBasedBumpingSampled")
+            return std::string(FixedThreshold ? "ThresholdBasedBumpingFixed" : "ThresholdBasedBumpingSampled")
                     + " overload=" + std::to_string(overload)
                     + " slack=" + std::to_string(slack)
                     + " thresholdBitsUsed=" + std::to_string(kphf.thresholdBitsUsed())
@@ -57,4 +58,4 @@ class ThresholdBasedBumpingSampledContender : public Contender {
         bool hasLookup() const override { return true; }
 };
 
-void thresholdBasedBumpingSampledContenderRunner(size_t N, size_t k, double loadFactor);
+void thresholdBasedBumpingSampledContenderRunner(size_t N, size_t k, double loadFactor, bool fixedThreshold = false);
