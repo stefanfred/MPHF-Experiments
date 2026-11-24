@@ -1,0 +1,20 @@
+[package]
+name = "kphf"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitvec = "1.0.1"
+csv = "1.4.0"
+fxhash = "0.2.1"
+gxhash = "3.5.0"
+log = "0.4.29"
+mem_dbg = "0.4.3"
+memsize = "0.1.4"
+prefetch-index = "0.2.0"
+rand = "0.10.2"
+rapidhash = "4.4.1"
+rustc-hash = "2.1.1"
+serde = { version = "1.0.228", features = ["derive"] }
+sux = "0.14.0"
+wide = "1.5.0"
