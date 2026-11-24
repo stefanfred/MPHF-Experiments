@@ -31,6 +31,7 @@ class ThresholdBasedBumpingConsensusContender : public Contender {
             return std::string("ThresholdBasedBumpingConsensus")
                     + " overload=" + std::to_string(overload)
                     + " thresholdBits=" + std::to_string(thresholdBits)
+                    + " thresholdBitsUsed=" + std::to_string(kphf.thresholdBitsUsed())
                     + " repair=" + kphf::ThresholdBasedBumpingConsensus::repairModeName(repairMode);
         }
 

@@ -169,13 +169,28 @@ inline double small_codebook_cost(uint64_t k, double lambda, const std::vector<d
  * A single threshold has to be < 1, because bin sizes are fixed per layer and only fingerprints change with the
  * consensus seed, so a bin with more than k keys could never be fixed otherwise.
  */
-inline std::vector<double> threshold_codebook(uint64_t k, double lambda, uint64_t length) {
+inline std::vector<double> threshold_codebook(uint64_t k, double lambda, uint64_t length, double targetMu = 0) {
     using ThresholdBasedBumping::compute_thresholds_normalized;
     if (length >= 2) {
         return compute_thresholds_normalized(k, lambda, 1ul << length);
     }
-    double budget = double(length) - 0.4;
     auto make = [&](double t) { return length == 1 ? std::vector<double>{t, 1.0} : std::vector<double>{t}; };
+    if (targetMu > 0) {
+        // Load-factor aware: a single threshold T = mu/lambda thins the Pois(lambda) keys of a bin to about
+        // Pois(mu), and accepting every bin with at most k kept keys leaves E[Pois(mu) | <= k] = alpha k keys in
+        // it. That is the "upper curve" -log2 P[Pois(mu) <= k] / (alpha k) bits per key, close to the lower bound
+        // for small alpha. Capped so that no typical bin needs more than 3 bits of backtracking.
+        double tCap = 0, lo = 0, hi = 1;
+        for (int it = 0; it < 40; it++) {
+            double mid = 0.5 * (lo + hi), tail;
+            small_codebook_cost(k, lambda, {mid}, &tail);
+            if (tail <= 3.0) lo = mid; else hi = mid;
+        }
+        tCap = lo;
+        double t = std::clamp(targetMu / lambda, 1e-6, tCap);
+        return length == 1 ? std::vector<double>{0.6 * t, t} : std::vector<double>{t};
+    }
+    double budget = double(length) - 0.4;
     double lo = 0.0, hi = 1.0;
     for (int it = 0; it < 40; it++) {
         double mid = 0.5 * (lo + hi);
@@ -253,6 +268,7 @@ private:
      * so bins have either floor(bits) or ceil(bits) threshold bits. */
     uint64_t bitsFixed = 0;
     uint64_t minLength = 0;
+    double effectiveThresholdBits = 0;
     using Codebooks = std::array<std::vector<uint64_t>, 2>;
     /** codebookSets[s][l] is the codebook for length minLength + l (l = 0, 1). Set 0 is for bins with
      * Pois(gamma k) keys. Small codebooks (no "bump everything" threshold) need a second set for the last layer if
@@ -335,6 +351,11 @@ public:
     /** Number of keys that were placed by the repair step. */
     [[nodiscard]] size_t numRepairedKeys() const {
         return numRepaired;
+    }
+
+    /** Threshold bits per bin that were actually used (raised for alpha < 1 if too small, see constructor) */
+    [[nodiscard]] double thresholdBitsUsed() const {
+        return effectiveThresholdBits;
     }
 
     [[nodiscard]] size_t numLayers() const {
@@ -437,7 +458,13 @@ private:
             return length(cur_bucket - 1);
         }
 
+        uint64_t backtracks = 0;
+
         uint64_t backtrack() {
+            // Too few threshold bits for the bins make the search exponential. Give up instead of hanging.
+            if (++backtracks > 2000 * total_buckets + 10000000) {
+                throw std::runtime_error("ThresholdBasedBumpingConsensus: too few threshold bits, search does not end");
+            }
             cur_bucket--;
 
             if (cur_bucket == 0) {
@@ -550,6 +577,31 @@ private:
         if (thresholdBits < 0 || thresholdBits > double(MAX_THRESHOLD_SIZE - 1)) {
             throw std::invalid_argument("thresholdBits out of range");
         }
+        // For alpha < 1 and fewer than 2 threshold bits per bin, the codebooks thin every bin to about Pois(mu)
+        // with E[Pois(mu) | <= k] = alpha k (slightly more, so that the budget suffices), see threshold_codebook.
+        double targetMu = 0;
+        if (loadFactor < 0.99 && thresholdBits < 2.0) {
+            std::vector<uint64_t> oneBin(k + 1, 0);
+            oneBin[k] = 1;
+            double mu = tpois::solveLambda(oneBin, std::min(0.999 * k, 1.01 * loadFactor * k));
+            // A bin with a single threshold needs E_Y[-log2 P(success)] bits on average, which the bins with an
+            // extra bit have to provide. Use at least 1.5 times that, otherwise the consensus search gets very slow.
+            // Only worth it if that is cheap and the threshold is not capped (which would leave too few keys in
+            // the bins). Otherwise (alpha close to 1), windows of allowed empty slots with >= 2 bits per bin are
+            // better than accepting every bin with at most k keys.
+            auto single = threshold_codebook(k, k * overload, 0, mu);
+            double cost = small_codebook_cost(k, k * overload, single);
+            if (single[0] >= 0.999 * mu / (k * overload) && cost <= 1.0) {
+                targetMu = mu;
+                thresholdBits = std::max(thresholdBits, 1.5 * cost + 0.01);
+            }
+        }
+        if (thresholdBits < 2.0 && targetMu == 0) {
+            // Cost-driven small codebooks: bins with 0 bits need 0.005 bits, bins with 1 bit provide 0.4 bits of
+            // slack, so the average has to be clearly above 0.0125 bits per bin (less than 0.25 is slow in practice)
+            thresholdBits = std::max(thresholdBits, 0.25);
+        }
+        effectiveThresholdBits = thresholdBits;
         bitsFixed = static_cast<uint64_t>(std::llround(std::ldexp(thresholdBits, 32)));
         minLength = bitsFixed >> 32;
         struct CodebookSet {
@@ -560,7 +612,7 @@ private:
             std::array<std::vector<double>, 2> normalized;
             Codebooks cbs;
             for (uint64_t l = 0; l < 2; l++) {
-                normalized[l] = threshold_codebook(k, lambda, minLength + l);
+                normalized[l] = threshold_codebook(k, lambda, minLength + l, targetMu);
                 for (double t : normalized[l]) {
                     cbs[l].push_back(ThresholdBasedBumping::double_to_u64(t));
                 }

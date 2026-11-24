@@ -102,9 +102,14 @@ and CHD from cmph supports `k>=2, alpha<1`. Unsupported combinations are skipped
 - Threshold lengths are fractional (`thresholdBits=`, as in the consensus paper): bin `b` of a layer uses the bits
   `[floor(b*bits), floor((b+1)*bits))` of the layer's consensus stream, so bins get `floor(bits)` or `ceil(bits)`
   threshold bits, with one codebook per length. Below 2 bits, codebooks have 1 or 2 thresholds (no "bump everything"
-  threshold, any number of empty slots), chosen such that the expected consensus cost of a bin stays below its length
-  (`threshold_codebook`). This is what makes `alpha<1` cheap: e.g. k=8 needs 0.11 bits/key at alpha=0.5 and 0.23 at
-  alpha=0.8 (previously at least 2 bits per used bin, i.e. 0.33-0.43 bits/key).
+  threshold, any number of empty slots). If accepting every bin with at most k keys is cheap (small alpha), the
+  codebooks are load-factor aware: one threshold `T = mu/lambda` thins each bin to about `Pois(mu)` with
+  `E[Pois(mu) | <= k] = alpha k`, which is the "upper curve" `-log2 P[Pois(mu) <= k]/(alpha k)` of the analysis
+  (close to the lower bound for small alpha), and the threshold bits are raised to 1.5x the resulting consensus
+  cost if needed (`thresholdBitsUsed=`). Otherwise the thresholds are chosen such that the expected consensus cost
+  of a bin stays below its length. E.g. k=8: 0.034 bits/key at alpha=0.5 and 0.067 at alpha=0.6; k=100: 0.0098 at
+  alpha=0.8 (previously at least 2 bits per used bin, i.e. 0.33-0.43 bits/key for k=8). Configurations whose
+  consensus search does not end (too few bits) fail with an error instead of hanging.
 - Repair (`repair=` in the name): `auto` uses `CapacityRepair` (`include/common/CapacityRepair.hpp`, hash-and-displace
   into the bins with free slots, Rice-coded seeds) if at least 1.25x as many free slots as leftover keys remain, and
   FiPS + Elias-Fano (the original method) otherwise, e.g. always for alpha=1.

@@ -30,7 +30,8 @@ inline std::vector<double> consensusThresholdBits(size_t k, double loadFactor) {
     size_t firstSize = tlx::integer_log2_ceil(k) >= 6 ? tlx::integer_log2_ceil(k) - 4 : 2;
     std::vector<double> result;
     if (loadFactor < 1.0 - 1e-9) {
-        for (double b : {0.25, 0.5, 1.0, 1.5}) {
+        // 0: as few bits as possible (raised automatically, see ThresholdBasedBumpingConsensus constructor)
+        for (double b : {0.0, 0.1, 0.25, 0.5, 1.0, 1.5}) {
             if (b < double(firstSize)) result.push_back(b);
         }
     }
